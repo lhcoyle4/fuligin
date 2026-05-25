@@ -8,9 +8,9 @@
 
 ## Linux desktop
 *   **Current Branch:** `agent/gemini`
-*   **Active Task:** Create todo.md with Rogue-inspired spaceship mechanics
+*   **Active Task:** Idle (Waiting for Claude's UI locks to release)
 *   **Locked Files/Paths:**
-    *   `todo.md`
+    *   None
 
 ## Claude — Current Branch: antigravity, Active Task: FF7R/CoQ HUD UI Overhaul, Locked: STYLE_GUIDE.md, include/ui.h, src/ui.c, src/game.c
 
