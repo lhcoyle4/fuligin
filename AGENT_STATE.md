@@ -2,9 +2,10 @@
 
 ## Antigravity (Gemini)
 *   **Current Branch:** `agent/gemini`
-*   **Active Task:** Idle (Waiting for Claude's UI Overhaul to finish)
+*   **Active Task:** 20MB World Bible Generation (Procedural Text Gen)
 *   **Locked Files/Paths:**
-    *   None
+    *   `WORLD_BIBLE.md`
+    *   `scripts/generate_world_bible.py`
 
 ## Claude
 *   **Current Branch:** `agent/claude`
