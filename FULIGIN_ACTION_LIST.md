@@ -31,7 +31,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **5. Scanline shimmer** ✅ [DONE] — 1px horizontal sweep, 5–10% opacity, every 3–5s. Toggleable via `graphics.scanlines`. Applies only to gameplay viewport, not menu overlays.
 
-**6. Screen-edge vignette** — PHOTIC RUST `#B22222` tint at screen edges, scales with zone depth. CINNABAR pulse on beat peak.
+**6. Screen-edge vignette** ✅ [DONE] — PHOTIC RUST `#B22222` tint at screen edges, scales with zone depth. CINNABAR pulse on beat peak.
 
 **7. Score / event floats** *(terminal style)* ✅ [DONE] — `Share Tech Mono`, all-caps, scale-up-and-fade over 1.5s. URTH CYAN for Chronicle gain, CINNABAR for damage, ACID GREEN for resource pickup. Format matches item card stat style from `FULIGIN_Guide.pdf` p.2.
 

@@ -5677,6 +5677,56 @@ static void render_overlays(void)
     /* Switch to screen space for all remaining overlays */
     vg_set_camera((Vec2){0.0f, 0.0f});
 
+    /* ── Screen-edge vignette + zone rust tint ──────────────────────────
+     * Base black vignette (ui_vignette) darkens all four edges every frame.
+     * When the player is in a non-HOME zone, a PHOTIC RUST (#B22222) tinted
+     * pass overlays the edges with intensity proportional to zone depth
+     * (zone 1 = subtle, zone 3 = heavy).  A 2 Hz sine wave approximates the
+     * audio beat peak, blending the tint toward CINNABAR (227,66,52) and
+     * briefly boosting alpha, making the screen pulse with zone menace.   */
+    if (game_state == STATE_PLAYING || game_state == STATE_PAUSED ||
+        game_state == STATE_ATTRACT_GAMEPLAY) {
+
+        ui_vignette(g_renderer);   /* base black edge darkening — always on */
+
+        if (player_zone > 0) {
+            float zone_f = (float)player_zone / 3.0f;          /* 0→1      */
+            /* 2 Hz beat pulse: 0→1 sine, peaks once per half-second */
+            float beat   = (sinf(game_time * 12.5664f) + 1.0f) * 0.5f;
+            /* Colour: blend PHOTIC RUST → CINNABAR on beat in deep zones */
+            Uint8 vr = (Uint8)(178.0f + beat * zone_f * 49.0f); /* 178→227 */
+            Uint8 vg = (Uint8)( 34.0f + beat * zone_f * 32.0f); /* 34→66   */
+            Uint8 vb = (Uint8)( 34.0f + beat * zone_f * 18.0f); /* 34→52   */
+            /* Alpha: 0 at HOME, up to 85+40=125 at THE ABYSS on beat peak */
+            Uint8 aa = (Uint8)(zone_f * (85.0f + beat * zone_f * 40.0f));
+            SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+            /* Outer pass — 60px band, 1/3 alpha */
+            SDL_SetRenderDrawColor(g_renderer, vr, vg, vb, aa / 3);
+            {
+                SDL_Rect vig_o[4] = {
+                    {0,                0,                SCREEN_WIDTH,  60},
+                    {0,                SCREEN_HEIGHT-60, SCREEN_WIDTH,  60},
+                    {0,                0,                60,            SCREEN_HEIGHT},
+                    {SCREEN_WIDTH-60,  0,                60,            SCREEN_HEIGHT}
+                };
+                for (int vi = 0; vi < 4; vi++)
+                    SDL_RenderFillRect(g_renderer, &vig_o[vi]);
+            }
+            /* Inner pass — 30px band, 2/3 alpha (stronger near edge) */
+            SDL_SetRenderDrawColor(g_renderer, vr, vg, vb, (2 * aa) / 3);
+            {
+                SDL_Rect vig_i[4] = {
+                    {0,                0,                SCREEN_WIDTH,  30},
+                    {0,                SCREEN_HEIGHT-30, SCREEN_WIDTH,  30},
+                    {0,                0,                30,            SCREEN_HEIGHT},
+                    {SCREEN_WIDTH-30,  0,                30,            SCREEN_HEIGHT}
+                };
+                for (int vi = 0; vi < 4; vi++)
+                    SDL_RenderFillRect(g_renderer, &vig_i[vi]);
+            }
+        }
+    }
+
     /* ── CRT Scanline Shimmer ────────────────────────────────────────────────────────────────
      * Applies only to the gameplay viewport (not menus).
      * Two passes:

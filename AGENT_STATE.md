@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Screen-edge zone vignette — PHOTIC RUST tint scaling with zone depth + CINNABAR beat pulse
-- **Locked Files**: src/game.c
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -39,3 +39,4 @@
 | Claude | Chronicle Chord Harmonics: pentatonic FM arpeggio on rapid orb collection | agent/claude | 2026-05-25 |
 | Claude | Score/Event Floats: EventFloat pool, typed HIT/CRIT/CHRONICLE/VENT labels with scale+fade | agent/claude | 2026-05-25 |
 | Claude | Warp-Drive Singularity Exit FX: CRT bloom flash + 3 expanding cyan vector rings on warp arrival (default variant) | agent/claude | 2026-05-25 |
+| Claude | Screen-Edge Zone Vignette: PHOTIC RUST tint scaling with zone depth, CINNABAR 2Hz beat pulse | agent/claude | 2026-05-25 |
