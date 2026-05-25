@@ -9,7 +9,8 @@
  *
  * This module has NO knowledge of game state.  All values are passed as
  * arguments.  It only depends on SDL2, math.h, and vector_font.h (for
- * ui_panel_header, which renders text via the vector stroke font).
+ * ui_panel_header and ui_section_divider, which render text via the vector
+ * stroke font).
  *
  * FULIGIN — Gene Wolfe's Book of the New Sun / Jack Vance's Dying Earth
  */
@@ -19,6 +20,7 @@
 
 #include <math.h>
 #include <stdlib.h>   /* rand() for particle init */
+#include <string.h>   /* strlen() for ui_section_divider label width estimate */
 
 /* =========================================================
  * CONSTANTS
@@ -31,12 +33,20 @@
 /* Glow spread widths for the border pass system */
 #define UI_GLOW_OUTER_SPREAD  2.0f
 #define UI_GLOW_INNER_SPREAD  1.0f
-#define UI_GLOW_OUTER_ALPHA   28    /* fraction of border.a for outer pass */
-#define UI_GLOW_INNER_ALPHA   70    /* fraction of border.a for inner pass */
+#define UI_GLOW_OUTER_ALPHA   22    /* very transparent outer halo (design brief §Glow) */
+#define UI_GLOW_INNER_ALPHA   65    /* semi-transparent inner ring */
 
 /* Screen bounds used by particle drift; matches SCREEN_WIDTH/HEIGHT in game.h */
 #define UI_SCREEN_W  1280.0f
 #define UI_SCREEN_H   960.0f
+
+/* Block bar geometry */
+#define UI_BLOCK_W    5     /* width of each block rectangle */
+#define UI_BLOCK_GAP  1     /* 1px gap between blocks */
+#define UI_BLOCK_H    8     /* fixed bar height for block bars */
+
+/* Segmented bar gap */
+#define UI_SEG_GAP    2     /* pixel gap between bar segments */
 
 /* =========================================================
  * MODULE-SCOPE STATE
@@ -57,10 +67,18 @@ static Particle s_particles[UI_MAX_PARTICLES];
 static int      s_particles_ready = 0;
 
 /* =========================================================
- * COLOR PALETTE — zone table
+ * COLOR PALETTE — zone tables
  * ========================================================= */
 
-/* Zone-indexed border colors matching the lore zones:
+/* HUD zone accent colors (new authoritative palette) */
+const SDL_Color HUD_ZONE_ACCENT[4] = {
+    {  0, 180, 216, 200},  /* HOME SPACE  — Noctis teal   #00b4d8 */
+    {  0, 140, 255, 200},  /* INNER BELT  — cool azure            */
+    {160,  80, 255, 200},  /* DEEP VOID   — void purple           */
+    {227,  66,  52, 220},  /* THE ABYSS   — cinnabar red          */
+};
+
+/* Zone-indexed border colors (deprecated — use HUD_ZONE_ACCENT):
  *   0 = HOME SPACE (cyan), 1 = INNER BELT (blue), 2 = DEEP VOID (purple),
  *   3 = THE ABYSS (red) */
 const SDL_Color UI_ZONE_COLORS[4] = {
@@ -148,6 +166,90 @@ void ui_panel(SDL_Renderer *r, float x, float y, float w, float h,
 }
 
 /**
+ * @brief Draw an angled-cut panel with the top-left corner clipped diagonally.
+ *        See ui.h for full documentation.
+ */
+void ui_panel_angled(SDL_Renderer *r, float x, float y, float w, float h,
+                     float cut, SDL_Color border)
+{
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    /* ── Fill: two SDL_FRect calls to approximate the polygon ── */
+    {
+        SDL_Color fill = HUD_PANEL_FILL;
+        set_color(r, fill);
+
+        /* Main body (full width, below the cut row) */
+        SDL_FRect main_body = { x, y + cut, w, h - cut };
+        SDL_RenderFillRectF(r, &main_body);
+
+        /* Top strip (right of the cut, above main body) */
+        SDL_FRect top_strip = { x + cut, y, w - cut, cut };
+        SDL_RenderFillRectF(r, &top_strip);
+    }
+
+    /* ── CRT scanlines over the filled interior ──────────── */
+    ui_scanlines(r, x, y + cut, w, h - cut);
+    ui_scanlines(r, x + cut, y, w - cut, cut);
+
+    /* ── 6-point polygon outline — three border passes ───── */
+    /* Points trace the angled polygon clockwise: */
+    /*   (x+cut, y) → (x+w, y) → (x+w, y+h) → (x, y+h) → (x, y+cut) → close */
+
+    /* Pass 1: outer halo (+OUTER_SPREAD px expand, very low alpha) */
+    {
+        float s = UI_GLOW_OUTER_SPREAD;
+        SDL_Color glow = { border.r, border.g, border.b, UI_GLOW_OUTER_ALPHA };
+        set_color(r, glow);
+        SDL_FPoint pts[7] = {
+            { x + cut - s,  y - s       },
+            { x + w   + s,  y - s       },
+            { x + w   + s,  y + h + s   },
+            { x       - s,  y + h + s   },
+            { x       - s,  y + cut - s },
+            { x + cut - s,  y - s       },
+            { x + cut - s,  y - s       },
+        };
+        SDL_RenderDrawLinesF(r, pts, 7);
+    }
+
+    /* Pass 2: inner glow (+INNER_SPREAD px, mid alpha) */
+    {
+        float s = UI_GLOW_INNER_SPREAD;
+        SDL_Color glow = { border.r, border.g, border.b, UI_GLOW_INNER_ALPHA };
+        set_color(r, glow);
+        SDL_FPoint pts[7] = {
+            { x + cut - s,  y - s       },
+            { x + w   + s,  y - s       },
+            { x + w   + s,  y + h + s   },
+            { x       - s,  y + h + s   },
+            { x       - s,  y + cut - s },
+            { x + cut - s,  y - s       },
+            { x + cut - s,  y - s       },
+        };
+        SDL_RenderDrawLinesF(r, pts, 7);
+    }
+
+    /* Pass 3: main 1px border at full border.a */
+    {
+        set_color(r, border);
+        SDL_FPoint pts[7] = {
+            { x + cut,  y       },
+            { x + w,    y       },
+            { x + w,    y + h   },
+            { x,        y + h   },
+            { x,        y + cut },
+            { x + cut,  y       },
+            { x + cut,  y       },
+        };
+        SDL_RenderDrawLinesF(r, pts, 7);
+
+        /* Explicit diagonal cut edge */
+        SDL_RenderDrawLineF(r, x + cut, y, x, y + cut);
+    }
+}
+
+/**
  * @brief Draw a small section-header label inside a panel with a separator.
  *        See ui.h for full documentation.
  */
@@ -177,7 +279,7 @@ void ui_scanlines(SDL_Renderer *r, float x, float y, float w, float h)
 }
 
 /* =========================================================
- * PROGRESS BAR
+ * PROGRESS BARS
  * ========================================================= */
 
 /**
@@ -227,9 +329,235 @@ void ui_bar(SDL_Renderer *r, float x, float y, float w, float h,
     }
 }
 
+/**
+ * @brief Draw an ATB-style segmented progress bar.
+ *        See ui.h for full documentation.
+ */
+void ui_bar_segmented(SDL_Renderer *r, float x, float y, float w, float h,
+                      float value, float maximum, int segments, SDL_Color fill)
+{
+    if (segments < 1) { segments = 1; }
+
+    float pct = (maximum > 0.0f) ? (value / maximum) : 0.0f;
+    if (pct > 1.0f) pct = 1.0f;
+    if (pct < 0.0f) pct = 0.0f;
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    /* Segment width: total bar width minus (N-1) gaps, divided N ways */
+    float total_gap = (float)(segments - 1) * (float)UI_SEG_GAP;
+    float seg_w = (w - total_gap) / (float)segments;
+
+    for (int i = 0; i < segments; i++) {
+        float sx = x + (float)i * (seg_w + (float)UI_SEG_GAP);
+
+        /* Value fraction that falls within this segment */
+        float seg_start = (float)i       / (float)segments;
+        float seg_end   = (float)(i + 1) / (float)segments;
+        float seg_pct   = 0.0f;
+        if (pct >= seg_end) {
+            seg_pct = 1.0f;
+        } else if (pct > seg_start) {
+            seg_pct = (pct - seg_start) / (seg_end - seg_start);
+        }
+
+        /* ── Track ──────────────────────────────────────────── */
+        {
+            SDL_Color track = HUD_TRACK;
+            set_color(r, track);
+            SDL_FRect tr = { sx, y, seg_w, h };
+            SDL_RenderFillRectF(r, &tr);
+        }
+
+        /* ── Fill ───────────────────────────────────────────── */
+        if (seg_pct > 0.005f) {
+            float fill_w = seg_w * seg_pct;
+            set_color(r, fill);
+            SDL_FRect fr = { sx, y, fill_w, h };
+            SDL_RenderFillRectF(r, &fr);
+
+            /* Leading-edge glow at fill boundary */
+            {
+                SDL_Color glow = { fill.r, fill.g, fill.b, 150 };
+                set_color(r, glow);
+                float edge_x = sx + fill_w - 2.0f;
+                if (edge_x < sx) edge_x = sx;
+                SDL_FRect eg = { edge_x, y - 1.0f, 3.0f, h + 2.0f };
+                SDL_RenderFillRectF(r, &eg);
+            }
+        }
+
+        /* ── Segment border at half fill alpha ──────────────── */
+        {
+            SDL_Color bord = { fill.r, fill.g, fill.b,
+                               (Uint8)(fill.a / 2) };
+            set_color(r, bord);
+            draw_rect_outline(r, sx, y, seg_w, h);
+        }
+
+        /* ── Gap between segments (dark rect) ───────────────── */
+        if (i < segments - 1) {
+            SDL_Color gap_clr = { 0, 0, 0, 200 };
+            set_color(r, gap_clr);
+            SDL_FRect gap = { sx + seg_w, y, (float)UI_SEG_GAP, h };
+            SDL_RenderFillRectF(r, &gap);
+        }
+    }
+}
+
+/**
+ * @brief Draw a CoQ-style discrete block bar.
+ *        See ui.h for full documentation.
+ */
+void ui_bar_block(SDL_Renderer *r, float x, float y,
+                  float value, float maximum, int max_blocks,
+                  SDL_Color fill)
+{
+    if (max_blocks < 1) { max_blocks = 1; }
+
+    float pct = (maximum > 0.0f) ? (value / maximum) : 0.0f;
+    if (pct > 1.0f) pct = 1.0f;
+    if (pct < 0.0f) pct = 0.0f;
+
+    int filled = (int)(pct * (float)max_blocks + 0.5f);
+    if (filled > max_blocks) { filled = max_blocks; }
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    for (int i = 0; i < max_blocks; i++) {
+        float bx = x + (float)i * (float)(UI_BLOCK_W + UI_BLOCK_GAP);
+
+        if (i < filled) {
+            /* Filled block */
+            set_color(r, fill);
+        } else {
+            /* Empty block — HUD_TRACK at reduced alpha */
+            SDL_Color empty = HUD_TRACK;
+            empty.a = 20;
+            set_color(r, empty);
+        }
+
+        SDL_FRect blk = { bx, y, (float)(UI_BLOCK_W - 1), (float)UI_BLOCK_H };
+        SDL_RenderFillRectF(r, &blk);
+    }
+}
+
 /* =========================================================
- * ATMOSPHERE — PARTICLE DRIFT
+ * TERMINAL MOTIFS
  * ========================================================= */
+
+/**
+ * @brief Draw a `>` selection chevron as two SDL lines.
+ *        See ui.h for full documentation.
+ */
+void ui_cursor_chevron(SDL_Renderer *r, float x, float y, SDL_Color color)
+{
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    set_color(r, color);
+    SDL_RenderDrawLineF(r, x,       y,     x + 6.0f, y + 4.0f);
+    SDL_RenderDrawLineF(r, x + 6.0f, y + 4.0f, x,   y + 8.0f);
+}
+
+/**
+ * @brief Draw a `─── LABEL ───` section divider with centered text.
+ *        See ui.h for full documentation.
+ */
+void ui_section_divider(SDL_Renderer *r, float x, float y, float w,
+                        const char *label, SDL_Color color)
+{
+    /* Estimate label pixel width — use vf_measure_string if available,
+     * otherwise fall back to a 5px-per-character approximation. */
+    float label_w;
+#ifdef VF_MEASURE_STRING_AVAILABLE
+    label_w = vf_measure_string(label, 9);
+#else
+    label_w = (float)strlen(label) * 5.0f;
+#endif
+
+    float label_x = x + (w - label_w) * 0.5f;
+    float rule_y  = y + 5.0f;  /* vertical centre of the rule line */
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    /* Left rule */
+    SDL_SetRenderDrawColor(r, color.r, color.g, color.b, 80);
+    SDL_RenderDrawLineF(r, x + 4.0f, rule_y, label_x - 4.0f, rule_y);
+
+    /* Label text */
+    vf_draw_string(label, label_x, y, 9, color);
+
+    /* Right rule */
+    SDL_SetRenderDrawColor(r, color.r, color.g, color.b, 80);
+    SDL_RenderDrawLineF(r, label_x + label_w + 4.0f, rule_y,
+                           x + w - 4.0f, rule_y);
+}
+
+/**
+ * @brief Draw three `>>>` warning chevrons spaced 8px apart.
+ *        See ui.h for full documentation.
+ */
+void ui_warning_chevrons(SDL_Renderer *r, float x, float y, SDL_Color color)
+{
+    for (int i = 0; i < 3; i++) {
+        ui_cursor_chevron(r, x + (float)i * 8.0f, y, color);
+    }
+}
+
+/* =========================================================
+ * ATMOSPHERE
+ * ========================================================= */
+
+/**
+ * @brief Draw a screen-edge vignette using stacked alpha-blended rects.
+ *        See ui.h for full documentation.
+ */
+void ui_vignette(SDL_Renderer *r)
+{
+    /* Alpha values for layers 0 (innermost) through 7 (outermost / darkest) */
+    static const Uint8 depths[8] = { 0, 5, 10, 18, 28, 42, 60, 85 };
+
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    for (int i = 0; i < 8; i++) {
+        SDL_SetRenderDrawColor(r, 0, 0, 0, depths[i]);
+
+        /* Top edge — layer i is the i-th strip from the top */
+        {
+            SDL_FRect top = { 0.0f,
+                              (float)i * 10.0f,
+                              UI_SCREEN_W,
+                              10.0f };
+            SDL_RenderFillRectF(r, &top);
+        }
+
+        /* Bottom edge — layer i is the i-th strip from the bottom */
+        {
+            SDL_FRect bot = { 0.0f,
+                              UI_SCREEN_H - (float)(i + 1) * 10.0f,
+                              UI_SCREEN_W,
+                              10.0f };
+            SDL_RenderFillRectF(r, &bot);
+        }
+
+        /* Left edge — draw all 8 strips (each 10px wide) */
+        {
+            SDL_FRect lft = { (float)(7 - i) * 10.0f,
+                              0.0f,
+                              10.0f,
+                              UI_SCREEN_H };
+            SDL_RenderFillRectF(r, &lft);
+        }
+
+        /* Right edge */
+        {
+            SDL_FRect rgt = { UI_SCREEN_W - (float)(8 - i) * 10.0f,
+                              0.0f,
+                              10.0f,
+                              UI_SCREEN_H };
+            SDL_RenderFillRectF(r, &rgt);
+        }
+    }
+}
 
 /**
  * @brief Initialize particle table with pseudo-random stable positions.
@@ -291,6 +619,7 @@ void ui_particle_drift(SDL_Renderer *r, float game_time, int count)
         /* Pulse alpha with slow sine wave */
         float pulse = 0.6f + 0.4f * sinf(game_time * 0.8f + p->phase);
         Uint8 a     = (Uint8)(p->alpha * pulse);
+        /* HUD_PARTICLE_CLR tint: {0, 200, 255, a} */
         SDL_SetRenderDrawColor(r, 0, 200, 255, a);
         SDL_RenderDrawPointF(r, px, py);
     }
@@ -305,9 +634,9 @@ void ui_particle_drift(SDL_Renderer *r, float game_time, int count)
  */
 SDL_Color ui_fuel_color(float pct)
 {
-    if (pct > 0.30f) return (SDL_Color){ 57, 255,  20, 220 };  /* UI_GREEN  */
-    if (pct > 0.10f) return (SDL_Color){255, 140,   0, 220 };  /* UI_AMBER  */
-    return               (SDL_Color){227,  66,  52, 240 };  /* UI_CINNABAR */
+    if (pct > 0.30f) return HUD_GREEN;
+    if (pct > 0.10f) return HUD_AMBER;
+    return HUD_CINNABAR;
 }
 
 /**
@@ -317,7 +646,7 @@ SDL_Color ui_zone_color(int zone)
 {
     if (zone < 0) { zone = 0; }
     if (zone > 3) { zone = 3; }
-    return UI_ZONE_COLORS[zone];
+    return HUD_ZONE_ACCENT[zone];
 }
 
 /**
