@@ -79,4 +79,55 @@ int main(int argc, char *argv[]) {
         "FULIGIN",
         SDL_WINDOWPOS_CENTERED,
         SDL_WINDOWPOS_CENTERED,
-        SCREEN_WI
+        SCREEN_WIDTH,
+        SCREEN_HEIGHT,
+        SDL_WINDOW_SHOWN
+    );
+
+    if (!g_window) {
+        SDL_Log("Window could not be created! SDL_Error: %s", SDL_GetError());
+        SDL_Quit();
+        return 1;
+    }
+
+    g_renderer = SDL_CreateRenderer(
+        g_window,
+        -1,
+        SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_TARGETTEXTURE
+    );
+
+    if (!g_renderer) {
+        SDL_Log("Renderer could not be created! SDL_Error: %s", SDL_GetError());
+        SDL_DestroyWindow(g_window);
+        SDL_Quit();
+        return 1;
+    }
+
+    if (!audio_init()) {
+        SDL_Log("Warning: Audio system failed to initialize.");
+    }
+
+    vg_init(g_renderer, SCREEN_WIDTH, SCREEN_HEIGHT);
+    vg_clear();
+    game_init();
+
+    last_ticks = SDL_GetTicks();
+
+    /* On the WebAssembly/browser target Emscripten replaces the blocking while-loop
+     * with its own scheduler tied to requestAnimationFrame, keeping the browser tab
+     * responsive and honouring the display refresh rate. */
+#ifdef __EMSCRIPTEN__
+    emscripten_set_main_loop(main_loop, 0, 1);
+#else
+    while (running) {
+        main_loop();
+    }
+#endif
+
+    audio_cleanup();
+    SDL_DestroyRenderer(g_renderer);
+    SDL_DestroyWindow(g_window);
+    SDL_Quit();
+
+    return 0;
+}

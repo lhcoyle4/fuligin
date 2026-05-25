@@ -1431,4 +1431,269 @@ static void mix_music_callback(void *udata, Uint8 *stream, int len) {
  * @brief Drives the dynamic music system each frame.
  *        All SynthState parameters are smoothed toward their targets using
  *        linear interpolation at rates chosen to give musically appropriate
- *        crossfade durations (menu/play: ~0.5 s; comb
+ *        crossfade durations (menu/play: ~0.5 s; combat: ~1 s;
+ *        spookiness: ~2 s; pause: ~0.33 s).
+ *        Also registers the post-mix callback on first call.
+ */
+void audio_set_music_params(float combat, float spookiness, int paused, int gameplay, float dt) {
+    static int post_mix_registered = 0;
+    if (!post_mix_registered) {
+        Mix_SetPostMix(mix_music_callback, NULL);
+        post_mix_registered = 1;
+    }
+
+    /* Interpolate menu_fade (1.0 in menu, 0.0 in game) */
+    float menu_target = gameplay ? 0.0f : 1.0f;
+    if (synth_state.menu_fade < menu_target) {
+        synth_state.menu_fade += 2.0f * dt;
+        if (synth_state.menu_fade > menu_target) synth_state.menu_fade = menu_target;
+    } else if (synth_state.menu_fade > menu_target) {
+        synth_state.menu_fade -= 2.0f * dt;
+        if (synth_state.menu_fade < menu_target) synth_state.menu_fade = menu_target;
+    }
+
+    /* Interpolate play_fade (1.0 in game, 0.0 in menu) */
+    float play_target = gameplay ? 1.0f : 0.0f;
+    if (synth_state.play_fade < play_target) {
+        synth_state.play_fade += 2.0f * dt;
+        if (synth_state.play_fade > play_target) synth_state.play_fade = play_target;
+    } else if (synth_state.play_fade > play_target) {
+        synth_state.play_fade -= 2.0f * dt;
+        if (synth_state.play_fade < play_target) synth_state.play_fade = play_target;
+    }
+
+    /* Interpolate combat_level */
+    if (synth_state.combat_level < combat) {
+        synth_state.combat_level += 1.0f * dt;
+        if (synth_state.combat_level > combat) synth_state.combat_level = combat;
+    } else if (synth_state.combat_level > combat) {
+        synth_state.combat_level -= 1.0f * dt;
+        if (synth_state.combat_level < combat) synth_state.combat_level = combat;
+    }
+
+    /* Interpolate spookiness */
+    if (synth_state.spookiness < spookiness) {
+        synth_state.spookiness += 0.5f * dt;
+        if (synth_state.spookiness > spookiness) synth_state.spookiness = spookiness;
+    } else if (synth_state.spookiness > spookiness) {
+        synth_state.spookiness -= 0.5f * dt;
+        if (synth_state.spookiness < spookiness) synth_state.spookiness = spookiness;
+    }
+
+    /* Interpolate paused_fraction */
+    float paused_target = paused ? 1.0f : 0.0f;
+    if (synth_state.paused_fraction < paused_target) {
+        synth_state.paused_fraction += 3.0f * dt;
+        if (synth_state.paused_fraction > paused_target) synth_state.paused_fraction = paused_target;
+    } else if (synth_state.paused_fraction > paused_target) {
+        synth_state.paused_fraction -= 3.0f * dt;
+        if (synth_state.paused_fraction < paused_target) synth_state.paused_fraction = paused_target;
+    }
+}
+
+/**
+ * @brief Sets the master volume percentage and propagates to SDL_mixer.
+ */
+void audio_set_volume(int volume_percent) {
+    if (volume_percent < 0) volume_percent = 0;
+    if (volume_percent > 100) volume_percent = 100;
+    settings_volume = volume_percent;
+    Mix_Volume(-1, (volume_percent * MIX_MAX_VOLUME) / 100);
+}
+
+/**
+ * @brief Re-applies the current settings_volume to SDL_mixer.
+ */
+void audio_update_volumes(void) {
+    audio_set_volume(settings_volume);
+}
+
+/**
+ * @brief Globally mutes or unmutes all audio output.
+ */
+void audio_mute(int muted) {
+    audio_is_muted = muted;
+    if (muted) {
+        Mix_Volume(-1, 0);
+    } else {
+        Mix_Volume(-1, (settings_volume * MIX_MAX_VOLUME) / 100);
+    }
+}
+
+/**
+ * @brief Opens SDL_mixer, synthesizes all sound effects into memory, and
+ *        registers the dynamic-music post-mix callback.
+ *
+ * IMPORTANT: audio_buffers[] must remain allocated for the entire lifetime of
+ * the program.  Mix_QuickLoad_RAW() stores a raw pointer into each buffer
+ * rather than copying the data.  Freeing a buffer before audio_cleanup() would
+ * cause SDL_mixer to read freed memory on the audio thread.
+ */
+int audio_init(void) {
+    /* Open the audio device at the project sample rate, mono, 16-bit signed */
+    if (Mix_OpenAudio(SAMPLE_RATE, AUDIO_S16SYS, 1, 1024) < 0) {
+        SDL_Log("SDL_mixer could not initialize! SDL_mixer Error: %s", Mix_GetError());
+        return 0;
+    }
+
+    int size;
+
+    /* --- Player sounds --- */
+    audio_buffers[SFX_FIRE] = generate_laser(&size);
+    mix_chunks[SFX_FIRE] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_FIRE], size);
+
+    /* --- Generic explosions (noise-based, three sizes) --- */
+    audio_buffers[SFX_EXPLOSION_LG] = generate_noise(1.0f, 4.0f, &size);
+    mix_chunks[SFX_EXPLOSION_LG] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_EXPLOSION_LG], size);
+
+    audio_buffers[SFX_EXPLOSION_MD] = generate_noise(0.6f, 6.0f, &size);
+    mix_chunks[SFX_EXPLOSION_MD] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_EXPLOSION_MD], size);
+
+    audio_buffers[SFX_EXPLOSION_SM] = generate_noise(0.3f, 10.0f, &size);
+    mix_chunks[SFX_EXPLOSION_SM] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_EXPLOSION_SM], size);
+
+    /* --- Looping ship sounds --- */
+    audio_buffers[SFX_THRUST] = generate_thrust(&size);
+    mix_chunks[SFX_THRUST] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_THRUST], size);
+
+    /* --- Percussion beats (two pitches) --- */
+    audio_buffers[SFX_BEAT1] = generate_beat(110.0f, &size);
+    mix_chunks[SFX_BEAT1] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_BEAT1], size);
+
+    audio_buffers[SFX_BEAT2] = generate_beat(90.0f, &size);
+    mix_chunks[SFX_BEAT2] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_BEAT2], size);
+
+    /* --- Basic enemy (UFO) sounds --- */
+    audio_buffers[SFX_UFO_FIRE] = generate_ufo_fire(&size);
+    mix_chunks[SFX_UFO_FIRE] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_UFO_FIRE], size);
+
+    audio_buffers[SFX_UFO_LOOP] = generate_ufo_loop(&size);
+    mix_chunks[SFX_UFO_LOOP] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_UFO_LOOP], size);
+
+    /* --- Typed enemy weapon sounds --- */
+    audio_buffers[SFX_TURRET_FIRE] = generate_turret_fire(&size);
+    mix_chunks[SFX_TURRET_FIRE] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_TURRET_FIRE], size);
+
+    audio_buffers[SFX_UFO_FIRE_LG] = generate_ufo_fire_lg(&size);
+    mix_chunks[SFX_UFO_FIRE_LG] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_UFO_FIRE_LG], size);
+
+    audio_buffers[SFX_UFO_FIRE_SM] = generate_ufo_fire_sm(&size);
+    mix_chunks[SFX_UFO_FIRE_SM] = Mix_QuickLoad_RAW((Uint8*)audio_buffers[SFX_UFO_FIRE_SM], size);
+
+    audio_buffers[SFX_UFO_FIRE_KAMIKAZE] = generate_ufo_fire_kamikaze(&size);
+    mix_chunks[SFX_UFO_FIRE_KAMIKAZE] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_UFO_FIRE_KAMIKAZE], size);
+
+    audio_buffers[SFX_UFO_FIRE_BOMBER] = generate_ufo_fire_bomber(&size);
+    mix_chunks[SFX_UFO_FIRE_BOMBER] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_UFO_FIRE_BOMBER], size);
+
+    audio_buffers[SFX_UFO_FIRE_EYE] = generate_ufo_fire_eye(&size);
+    mix_chunks[SFX_UFO_FIRE_EYE] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_UFO_FIRE_EYE], size);
+
+    audio_buffers[SFX_UFO_FIRE_ELDRITCH] = generate_ufo_fire_eldritch(&size);
+    mix_chunks[SFX_UFO_FIRE_ELDRITCH] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_UFO_FIRE_ELDRITCH], size);
+
+    audio_buffers[SFX_UFO_FIRE_DAEMON] = generate_ufo_fire_daemon(&size);
+    mix_chunks[SFX_UFO_FIRE_DAEMON] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_UFO_FIRE_DAEMON], size);
+
+    /* --- Debris/material explosions --- */
+    audio_buffers[SFX_EXPL_ROCK_LG] = generate_expl_rock(2, &size);
+    mix_chunks[SFX_EXPL_ROCK_LG] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_ROCK_LG], size);
+
+    audio_buffers[SFX_EXPL_ROCK_MD] = generate_expl_rock(1, &size);
+    mix_chunks[SFX_EXPL_ROCK_MD] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_ROCK_MD], size);
+
+    audio_buffers[SFX_EXPL_ROCK_SM] = generate_expl_rock(0, &size);
+    mix_chunks[SFX_EXPL_ROCK_SM] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_ROCK_SM], size);
+
+    audio_buffers[SFX_EXPL_METAL_LG] = generate_expl_metal(2, &size);
+    mix_chunks[SFX_EXPL_METAL_LG] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_METAL_LG], size);
+
+    audio_buffers[SFX_EXPL_METAL_MD] = generate_expl_metal(1, &size);
+    mix_chunks[SFX_EXPL_METAL_MD] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_METAL_MD], size);
+
+    audio_buffers[SFX_EXPL_METAL_SM] = generate_expl_metal(0, &size);
+    mix_chunks[SFX_EXPL_METAL_SM] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_METAL_SM], size);
+
+    audio_buffers[SFX_EXPL_ICE_LG] = generate_expl_ice(2, &size);
+    mix_chunks[SFX_EXPL_ICE_LG] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_ICE_LG], size);
+
+    audio_buffers[SFX_EXPL_ICE_MD] = generate_expl_ice(1, &size);
+    mix_chunks[SFX_EXPL_ICE_MD] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_ICE_MD], size);
+
+    audio_buffers[SFX_EXPL_ICE_SM] = generate_expl_ice(0, &size);
+    mix_chunks[SFX_EXPL_ICE_SM] = Mix_QuickLoad_RAW(
+        (Uint8*)audio_buffers[SFX_EXPL_ICE_SM], size);
+
+    /* Register the real-time music synthesis callback */
+    Mix_SetPostMix(mix_music_callback, NULL);
+
+    return 1;
+}
+
+/**
+ * @brief Plays a sound effect on an available mixer channel.
+ *        SFX_THRUST and SFX_UFO_LOOP are looped; all others play once.
+ */
+void audio_play(SoundEffect sfx) {
+    if (sfx < 0 || sfx >= SFX_COUNT || !mix_chunks[sfx]) return;
+
+    if (sfx == SFX_UFO_LOOP) {
+        if (ufo_channel == -1 || !Mix_Playing(ufo_channel)) {
+            ufo_channel = Mix_PlayChannel(-1, mix_chunks[sfx], -1); /* loop infinitely */
+        }
+    } else if (sfx == SFX_THRUST) {
+        if (thrust_channel == -1 || !Mix_Playing(thrust_channel)) {
+            thrust_channel = Mix_PlayChannel(-1, mix_chunks[sfx], -1); /* loop infinitely */
+        }
+    } else {
+        Mix_PlayChannel(-1, mix_chunks[sfx], 0);
+    }
+}
+
+/**
+ * @brief Stops a currently-playing looping sound (SFX_THRUST or SFX_UFO_LOOP).
+ */
+void audio_stop(SoundEffect sfx) {
+    if (sfx == SFX_UFO_LOOP) {
+        if (ufo_channel != -1 && Mix_Playing(ufo_channel)) {
+            Mix_HaltChannel(ufo_channel);
+            ufo_channel = -1;
+        }
+    } else if (sfx == SFX_THRUST) {
+        if (thrust_channel != -1 && Mix_Playing(thrust_channel)) {
+            Mix_HaltChannel(thrust_channel);
+            thrust_channel = -1;
+        }
+    }
+}
+
+/**
+ * @brief Frees all synthesized audio buffers, Mix_Chunks, and closes SDL_mixer.
+ */
+void audio_cleanup(void) {
+    Mix_SetPostMix(NULL, NULL);
+    for (int i = 0; i < SFX_COUNT; i++) {
+        if (mix_chunks[i]) {
+            Mix_FreeChunk(mix_chunks[i]);
+            mix_chunks[i] = NULL;
+        }
+        if (audio_buffers[i]) {
+            free(audio_buffers[i]);
+            audio_buffers[i] = NULL;
+        }
+    }
+    Mix_CloseAudio();
+}

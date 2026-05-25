@@ -360,4 +360,98 @@ void vf_init(void)
     unk.line_count = 4;
     unk.lines[0] = (FontLine){0.0f, 0.0f, 1.0f, 0.0f};
     unk.lines[1] = (FontLine){1.0f, 0.0f, 1.0f, 1.0f};
-    unk.lines[2] = (FontLine){1.0f, 
+    unk.lines[2] = (FontLine){1.0f, 1.0f, 0.0f, 1.0f};
+    unk.lines[3] = (FontLine){0.0f, 1.0f, 0.0f, 0.0f};
+    g_unknown_char = unk;
+
+    font_initialized = 1;
+}
+
+/**
+ * @brief Draws a single character centered at (x, y) with the given scale
+ *        and color.  Unknown characters render as a fallback square.
+ *        Spaces are silently skipped.
+ *
+ * @param c     Character to draw (case-insensitive; converted to uppercase).
+ * @param x     X coordinate of the character center.
+ * @param y     Y coordinate of the character center.
+ * @param scale Uniform scale applied to the glyph.
+ * @param color SDL_Color used for the stroke lines.
+ */
+void vf_draw_char(char c, float x, float y, float scale, SDL_Color color)
+{
+    if (!font_initialized) vf_init();
+
+    c = (char)toupper((unsigned char)c);
+    FontChar fc = font_chars[(unsigned char)c];
+    if (fc.line_count == 0 && c != ' ') {
+        /* Use the pre-built fallback square for unrecognized glyphs. */
+        fc = g_unknown_char;
+    }
+
+    if (fc.line_count > 0) {
+        Line *lines = malloc(fc.line_count * sizeof(Line));
+        for (int i = 0; i < fc.line_count; i++) {
+            /* Character coordinates are in [0, 1].  Subtract 0.5 from each
+             * axis so the glyph is centered on the origin before scaling,
+             * letting vg_draw_shape place it precisely at (x, y). */
+            lines[i].p1.x = fc.lines[i].x1 - 0.5f;
+            lines[i].p1.y = fc.lines[i].y1 - 0.5f;
+            lines[i].p2.x = fc.lines[i].x2 - 0.5f;
+            lines[i].p2.y = fc.lines[i].y2 - 0.5f;
+        }
+
+        Shape s;
+        s.lines = lines;
+        s.line_count = fc.line_count;
+        s.color = color;
+
+        /* Offset the draw position by half a scale unit so the top-left
+         * corner of the glyph cell maps to (x, y) after the centering
+         * shift applied above. */
+        Vec2 pos = {x + scale * 0.5f, y + scale * 0.5f};
+        vg_draw_shape(&s, pos, 0.0f, scale);
+
+        free(lines);
+    }
+}
+
+/**
+ * @brief Draws a string of characters starting at (x, y).
+ *        Characters are spaced by (scale * FONT_CHAR_SPACING).
+ *
+ * @param str   Null-terminated string to draw.
+ * @param x     X coordinate of the left edge of the first character.
+ * @param y     Y coordinate of the top edge of the characters.
+ * @param scale Uniform scale applied to each glyph.
+ * @param color SDL_Color used for the stroke lines.
+ */
+void vf_draw_string(const char *str, float x, float y, float scale, SDL_Color color)
+{
+    float cur_x = x;
+    int len = (int)strlen(str);
+    for (int i = 0; i < len; i++) {
+        if (str[i] != ' ') {
+            vf_draw_char(str[i], cur_x, y, scale, color);
+        }
+        cur_x += scale * FONT_CHAR_SPACING;
+    }
+}
+
+/**
+ * @brief Draws a string horizontally centered on x.
+ *        The total string width is computed from character count, scale, and
+ *        FONT_CHAR_SPACING, then the string is left-shifted by half that width.
+ *
+ * @param str   Null-terminated string to draw.
+ * @param x     X coordinate that the string will be centered upon.
+ * @param y     Y coordinate of the top edge of the characters.
+ * @param scale Uniform scale applied to each glyph.
+ * @param color SDL_Color used for the stroke lines.
+ */
+void vf_draw_string_centered(const char *str, float x, float y, float scale, SDL_Color color)
+{
+    int len = (int)strlen(str);
+    float width = (len * scale * FONT_CHAR_SPACING) - (scale * 0.2f);
+    vf_draw_string(str, x - width / 2.0f, y, scale, color);
+}

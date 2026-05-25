@@ -355,3 +355,165 @@ anywhere. Removed to keep the module state section clean.
 ```
 
 Do not bundle dead code removal inside a feature commit — it makes the diff harder to review.
+
+---
+
+## Game-Specific Aesthetic Conventions
+
+*FULIGIN draws from Gene Wolfe's Book of the New Sun and Jack Vance's Dying Earth. Its visual language is vector line art and glassmorphism on a neon-on-black palette — the aesthetic of a dying civilization that still has style. The conventions below keep that identity consistent from the source through to rendered pixels.*
+
+---
+
+### Terminology in Code
+
+When naming game elements that surface in enum values, string constants, or UI labels, prefer lore-authentic terms over generic ones. The table below gives the canonical substitutions:
+
+| Generic term | FULIGIN term |
+|---|---|
+| upgrade | RELIQUARY |
+| XP / experience | CHRONICLE |
+| ship / player craft | AUTODYNE |
+| fly / move | DRIFT |
+| collect / pick up | SALVAGE |
+| enter / input | INSCRIBE |
+| you died / game over | THE AUTODYNE IS LOST TO THE VOID |
+
+Canonical entity and zone names — use these verbatim in enum variants, string constants, and comments:
+
+- **Factions / archetypes:** AUTARCH, CACOGEN, ASCIAN, LICTOR
+- **Zones:** HOME SPACE, INNER BELT, DEEP VOID, THE ABYSS
+- **Enemy types:** VECTOR STALKER, BOUNDARY WEAVER, EYE OF THE VOID, ELDRITCH TENDRIL, DAEMON SIGIL
+
+Example — enum using lore-authentic names:
+
+```c
+typedef enum {
+    ZONE_HOME_SPACE,
+    ZONE_INNER_BELT,
+    ZONE_DEEP_VOID,
+    ZONE_THE_ABYSS
+} ZoneId;
+
+typedef enum {
+    ENEMY_VECTOR_STALKER,
+    ENEMY_BOUNDARY_WEAVER,
+    ENEMY_EYE_OF_THE_VOID,
+    ENEMY_ELDRITCH_TENDRIL,
+    ENEMY_DAEMON_SIGIL
+} EnemyType;
+```
+
+---
+
+### Color Constants
+
+All colors used in rendering must be defined as named constants using the FULIGIN palette below. Never use raw `{r, g, b, a}` literals in draw calls — always reference a named constant so palette changes propagate from one place.
+
+Define these in a dedicated `/* FULIGIN Color Palette */` block inside the CONSTANTS section of whichever module owns the renderer (currently `render.c` / `render.h`):
+
+```c
+/* =========================================================
+ * FULIGIN Color Palette
+ * Semantic names encode role — use the right color for the
+ * right purpose rather than choosing by appearance alone.
+ * ========================================================= */
+#define COLOR_FULIGIN_BLACK   {   5,   5,   5, 255 }  /* The void — default background           */
+#define COLOR_URTH_CYAN       {   0, 255, 255, 255 }  /* Player craft, UI chrome, active borders */
+#define COLOR_CINNABAR        { 227,  66,  52, 255 }  /* Danger, enemy hulls, damage              */
+#define COLOR_SOLAR_AMBER     { 255, 140,   0, 255 }  /* Warnings, fuel gauge                     */
+#define COLOR_ACID_GREEN      {  57, 255,  20, 255 }  /* Resources, CHRONICLE (XP) bar            */
+#define COLOR_CACOGEN_MAGENTA { 255,   0, 255, 255 }  /* Enemy projectiles, chaos effects         */
+#define COLOR_GHOST_WHITE     { 240, 240, 240, 255 }  /* Primary UI text                          */
+#define COLOR_PHOTIC_RUST     { 178,  34,  34, 255 }  /* Background glow, deep-field tint         */
+```
+
+Use the semantic comment — it describes *intent*, not just the RGB value. When choosing which constant to reach for, match the role first, not the hue.
+
+---
+
+### UI String Rules
+
+All in-game UI strings follow these conventions:
+
+1. **ALL CAPS** for nearly all UI text. Lowercase is reserved for developer-facing log messages and Doxygen comments — never for player-facing strings.
+
+2. **Prefer lore terms** from the terminology table above. Never write "ship", "XP", or "upgrade" in a string constant that appears on screen.
+
+3. **Prefer evocative over descriptive.** The goal is atmosphere, not clarity-by-default:
+
+   ```c
+   /* Wrong — clinical */
+   #define STR_GAME_OVER  "YOU DIED"
+
+   /* Right — lore-authentic, atmospheric */
+   #define STR_GAME_OVER  "THE AUTODYNE IS LOST TO THE VOID"
+   ```
+
+4. **Dramatic subtitles** use spaced-out letters for typographic weight:
+
+   ```c
+   #define STR_SUBTITLE_DRIFT   "D R I F T I N G"
+   #define STR_SUBTITLE_LOST    "L O S T   T O   T H E   V O I D"
+   ```
+
+5. **Keep it punchy and minimal.** One clause is better than two. Cut any word that does not add meaning or atmosphere.
+
+All string constants go in their own named block in the CONSTANTS section, grouped by screen or context (title, HUD, game over, pause, etc.).
+
+---
+
+### Future UI Guidelines (dcimgui Overhaul)
+
+The upcoming dcimgui UI overhaul introduces a glassmorphism visual language. All new panel and widget code written against dcimgui must follow these rules. Existing SDL draw-call HUD code should be migrated toward these conventions as it is touched.
+
+**Panel style — frosted glass:**
+- Semi-transparent dark background (alpha ~180/255) over the scene layer
+- 1px border drawn in `COLOR_URTH_CYAN`, additive blend to produce a glow
+- No fill gradients — flat dark fill only; glow is achieved by the border and particle layers beneath
+
+**Corner radii:**
+- Combat HUD elements: **no rounding** (0px radius). Hard corners read as military / mechanical.
+- Menu and inventory panels: **2px rounding only**. Barely perceptible — just enough to soften modals without breaking the aesthetic.
+
+**Buttons:**
+- Minimal: label text only, no background fill in the default state
+- High-contrast: label in `COLOR_GHOST_WHITE`, border in `COLOR_URTH_CYAN`
+- Hover / focus state: add a low-opacity `COLOR_URTH_CYAN` fill (alpha ~40/255) and brighten border to full `COLOR_URTH_CYAN`
+- No drop shadows. Glow is additive, not diffuse.
+
+**Typography:**
+- All text rendered via the existing `vf_draw_string` vector-stroke font
+- Text color is `COLOR_GHOST_WHITE` in standard state; `COLOR_URTH_CYAN` for selected / active labels
+- Apply additive blend mode when drawing text that should glow (score floats, combo labels, warnings)
+- Never use bitmap or system fonts for player-facing UI
+
+**Background atmosphere:**
+- Particle drift layer runs beneath all panels — slow-moving points at low opacity
+- Phosphor shimmer pass on the background: a subtle periodic brightness pulse driven by `game_time`
+- Both effects are part of the render pipeline, not individual widget responsibility — widgets render over them
+
+**HUD zone layout — information-dense but spatially organized:**
+
+The HUD is divided into five fixed zones. Each zone owns specific data; nothing bleeds across zone boundaries without a design decision:
+
+```
++-------------------------------+
+| SCORE / LEVEL / COMBO   MINIMAP|
+|                                |
+|        [CENTER ZONE]           |
+|   combat feedback, warnings    |
+|   score floats, combo pops     |
+|                                |
+| LIVES / CHRONICLE    FUEL/RES  |
++-------------------------------+
+```
+
+| Zone | Position | Contents |
+|---|---|---|
+| Top-left | `HUD_TL_*` constants | Score, current level, active combo multiplier |
+| Top-right | `HUD_TR_*` constants | Minimap |
+| Bottom-left | `HUD_BL_*` constants | Lives indicator, CHRONICLE (XP) bar |
+| Bottom-right | `HUD_BR_*` constants | Fuel gauge, resource count |
+| Center | Transient overlays | Combat feedback: combo popups, score floats, proximity warnings |
+
+Center-zone elements are transient — they appear, linger briefly, and decay. They are never persistent HUD fixtures. Position constants for center overlays are expressed as offsets from screen center (`SCREEN_WIDTH / 2`, `SCREEN_HEIGHT / 2`), not absolute pixel values, so they remain correct at any resolution.

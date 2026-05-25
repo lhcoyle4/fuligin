@@ -799,7 +799,7 @@ static void init_asteroid_shape(AsteroidEntity *a, int size);
 static void spawn_asteroid(Vec2 pos, int size);
 static void reset_player(void);
 static int  get_zone(Vec2 pos);
-static void spawn_npc(void);
+static void spawn_npc(Vec2 pos);
 static void init_home_area(void);
 static void spawn_ufo(void);
 static void trigger_hyperspace(void);
@@ -812,18 +812,19 @@ static void start_next_level(void);
 static void start_new_game(void);
 
 /* Settings */
-static void settings_adjust(int action, int direction);
+static void settings_adjust(int dir);
 
 /* game_update sub-helpers (extracted for clarity) */
 static void update_player_physics(float dt);
-static void update_bullets(float dt);
+static void update_player_bullets(float dt);
 static void update_asteroids(float dt);
 static void update_ufo(float dt);
 static void update_ufo_bullets(float dt);
-static void update_particles_orbs(float dt);
+static void update_particles_orbs_npcs(float dt);
 static void update_collisions(float dt);
 static void update_spawning(float dt);
 static void update_progression(float dt);
+static void update_camera_and_audio(float dt);
 
 /* game_render sub-helpers (extracted for clarity) */
 static void render_entities(void);
@@ -831,10 +832,13 @@ static void render_hud(void);
 static void render_minimap(void);
 static void render_menus(void);
 static void render_overlays(void);
-static void get_controller_button_pos(SDL_GameControllerButton btn,
-                                      float cx, float cy, float *bx, float *by);
-static void draw_gamepad(float cx, float cy, float scale);
-static void render_controller_binds_page(void);
+static Vec2 get_controller_button_pos(SDL_GameControllerButton btn,
+                                      float cx, float cy);
+static void draw_gamepad(float cx, float cy, int highlighted_btn);
+static void render_controller_binds_page(float cx, float cy,
+                                         int keybind_sel,
+                                         SDL_GameControllerButton *ctrl_binds_arg,
+                                         const char **ct_action_names_arg);
 
 /* =========== PHYSICS AND MATH HELPERS =========== */
 
@@ -1676,10 +1680,6 @@ static void start_next_level()
     for (int i = 0; i < MAX_UFO_BULLETS; i++) ufo_bullets[i].active = 0;
     for (int i = 0; i < MAX_PARTICLES; i++)   particles[i].life    = 0.0f;
 
-    /* Deactivate mines and powerups */
-    for (int i = 0; i < MAX_MINES; i++)    mines[i].active    = 0;
-    for (int i = 0; i < MAX_POWERUPS; i++) powerups[i].active = 0;
-
     ufo.active = 0;
     audio_stop(SFX_UFO_LOOP);
 
@@ -2419,18 +2419,9 @@ void game_handle_input(SDL_Event *event)
  */
 
 /* ------------------------------------------------------------------ */
-/* Forward declarations for helpers used across subsystems             */
+/* Forward declarations for sub-helpers (definitions follow below)    */
 /* ------------------------------------------------------------------ */
-static void update_player_physics(float dt);
-static void update_player_bullets(float dt);
-static void update_asteroids(float dt);
-static void update_ufo(float dt);
-static void update_ufo_bullets(float dt);
-static void update_particles_orbs_npcs(float dt);
-static void update_collisions(float dt);
-static void update_spawning(float dt);
-static void update_progression(float dt);
-static void update_camera_and_audio(float dt);
+/* (These match the forward declarations already emitted in part 1.)  */
 
 /* ================================================================== */
 
@@ -2664,7 +2655,6 @@ static void update_player_physics(float dt)
             fuel_current -= FUEL_BURN_RATE * dt;
             if (fuel_current < 0.0f) fuel_current = 0.0f;
             audio_play(SFX_THRUST);
-            on_thrust(player.pos, player.vel);
         } else {
             is_thrusting = 0;
             audio_stop(SFX_THRUST);
@@ -2815,7 +2805,6 @@ static void update_player_physics(float dt)
             }
 
             audio_play(SFX_FIRE);
-            on_weapon_fire(player.pos, player.vel);
             fire_cooldown_timer =
                 0.25f * player_upgrades.fire_cooldown_mult;
         }
@@ -5800,4 +5789,18 @@ void game_render(void)
 
         /* World space — entities, score floats, world-space overlays */
         vg_set_camera(camera_pos);
-        ren
+        render_entities();
+        render_overlays();   /* resets camera to (0,0) internally */
+
+        /* Screen space — HUD and minimap */
+        vg_set_camera((Vec2){0.0f, 0.0f});
+        render_hud();
+        render_minimap();
+    }
+
+    /* Menus and full-screen states — always screen space */
+    vg_set_camera((Vec2){0.0f, 0.0f});
+    render_menus();
+
+    vg_present();
+}
