@@ -1,13 +1,41 @@
-# Active Agent Workspace Locks
+# FULIGIN Agent State
+<!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
-## Antigravity (Gemini)
-*   **Current Branch:** `agent/gemini`
-*   **Active Task:** Establishing concurrent pair-programming workflow
-*   **Locked Files/Paths:**
-    *   `[LOCKED]` `/AGENT_STATE.md`
+## Agent: Claude (Anthropic)
+- **Status**: Active
+- **Branch**: agent/claude
+- **Active Task**: Implementing zone banners, danger alerts, UFO audio sig, stress cracks, chronicle harmonics
+- **Locked Files**:
+  - `src/game.c`
+  - `src/audio.c`
+  - `src/vector_graphics.c`
+  - `include/game.h`
+  - `include/vector_graphics.h`
+  - `todo.md`
+  - `FULIGIN_ACTION_LIST.md`
+- **Last Updated**: 2026-05-25
 
-## Claude Code
-*   **Current Branch:** `agent/claude`
-*   **Active Task:** Idle
-*   **Locked Files/Paths:**
-    *   None
+## Agent: Gemini (Google)
+- **Status**: Idle
+- **Branch**: main
+- **Active Task**: None
+- **Locked Files**: None
+- **Last Updated**: 2026-05-25
+
+## Agent: Human (Louie)
+- **Status**: Idle
+- **Branch**: main
+- **Active Task**: None
+- **Locked Files**: None
+- **Last Updated**: 2026-05-25
+
+## Completed Work Log
+| Agent  | Task | Commit(s) | Date |
+|--------|------|-----------|------|
+| Claude | Phase 1: Project rename, SDL2 setup, core game loop | (merged) | 2025 |
+| Claude | Phase 2: HUD overhaul, vector font | (merged) | 2025 |
+| Claude | Phase 3: World Builder, enemy spawning, AI stub | (merged) | 2025 |
+| Gemini | todo.md: 14-feature roadmap | (merged) | 2025 |
+| Claude | Merge all branches → main (PR #1, all features preserved) | de0c317 | 2026-05-25 |
+| Claude | Mouse button keybinds: LMB=shoot, RMB=thrust, MMB=hyperspace | c9d99e5 | 2026-05-25 |
+| Claude | Add FULIGIN_ACTION_LIST.md (32-item roadmap) | 226e3bb | 2026-05-25 |
