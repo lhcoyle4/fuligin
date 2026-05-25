@@ -580,6 +580,7 @@ static const char *difficulty_names[] = {
 static GameState  game_state  = STATE_TITLE;
 static Difficulty difficulty  = DIFFICULTY_NORMAL;
 static float      game_time   = 0.0f;  /* accumulated game time (seconds), for physics */
+static float      g_boot_timer = 0.0f; /* terminal boot sequence timer */
 
 /* --- High scores & initials entry --- */
 static HighScore high_scores[5];
@@ -4335,6 +4336,10 @@ void game_update(float dt)
      * deterministic and frame-rate independent (no fixed 60-fps assumption). */
     game_time += dt;
 
+    if (game_state == STATE_TITLE) {
+        g_boot_timer += dt;
+    }
+
     /* ── Attract-mode idle sequencer ─────────────────────────────── */
     {
         int is_gameplay = (game_state == STATE_PLAYING
@@ -5675,6 +5680,33 @@ static void render_menus(void)
     if (game_state == STATE_TITLE) {
         static float title_timer = 0.0f;
         title_timer += 0.016f;  /* visual-only timer, frame-rate dependence acceptable */
+
+        if (g_boot_timer < 3.0f) {
+            SDL_Color term_green = {50, 255, 50, 255};
+            float start_x = 50.0f;
+            float start_y = 50.0f;
+            
+            if (g_boot_timer > 0.1f) {
+                vf_draw_string("NOCTIS OS V4.0 LOADED...", start_x, start_y, 16.0f, term_green);
+                start_y += 30.0f;
+            }
+            if (g_boot_timer > 0.6f) {
+                vf_draw_string("MEM CHECK OK...", start_x, start_y, 16.0f, term_green);
+                start_y += 30.0f;
+            }
+            if (g_boot_timer > 1.2f) {
+                vf_draw_string("INITIALIZING SENSORS...", start_x, start_y, 16.0f, term_green);
+                start_y += 30.0f;
+            }
+            if (g_boot_timer > 1.8f) {
+                vf_draw_string("LOADING FULIGIN PROTOCOL...", start_x, start_y, 16.0f, term_green);
+                start_y += 30.0f;
+            }
+            if (g_boot_timer > 2.5f) {
+                vf_draw_string("SYSTEM READY.", start_x, start_y, 16.0f, term_green);
+            }
+            return;
+        }
 
         /* Background atmosphere */
         ui_particle_drift(g_renderer, game_time, 40);
