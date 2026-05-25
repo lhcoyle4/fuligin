@@ -29,21 +29,21 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **4. Phosphor decay / Vectrex glow** — All vector lines (ships, bullets, UI borders) leave ~0.1s luminance trail via additive blend. Applies equally to `ui_panel_terminal()` border lines and gameplay geometry.
 
-**5. Scanline shimmer** — 1px horizontal sweep, 5–10% opacity, every 3–5s. Toggleable via `graphics.scanlines`. Applies only to gameplay viewport, not menu overlays.
+**5. Scanline shimmer** ✅ [DONE] — 1px horizontal sweep, 5–10% opacity, every 3–5s. Toggleable via `graphics.scanlines`. Applies only to gameplay viewport, not menu overlays.
 
 **6. Screen-edge vignette** — PHOTIC RUST `#B22222` tint at screen edges, scales with zone depth. CINNABAR pulse on beat peak.
 
-**7. Score / event floats** *(terminal style)* — `Share Tech Mono`, all-caps, scale-up-and-fade over 1.5s. URTH CYAN for Chronicle gain, CINNABAR for damage, ACID GREEN for resource pickup. Format matches item card stat style from `FULIGIN_Guide.pdf` p.2.
+**7. Score / event floats** *(terminal style)* ✅ [DONE] — `Share Tech Mono`, all-caps, scale-up-and-fade over 1.5s. URTH CYAN for Chronicle gain, CINNABAR for damage, ACID GREEN for resource pickup. Format matches item card stat style from `FULIGIN_Guide.pdf` p.2.
 
 **8. Zone transition banner** *(terminal style)* ✅ [DONE] — `>>> ENTERING IRON SHOALS <<<` slides in at top, monospace, GHOST WHITE with full URTH CYAN glow. Bracket-corner framing. Reference: todo.md zone transition spec.
 
 **9. Vector stress-cracking** ✅ [DONE] — High-value asteroids display spreading wireframe fractures before shattering. URTH CYAN cracks, CINNABAR flash at break point.
 
-**10. Warp-drive singularity exit effects** — Three unlockable warp FX: vector expansion (default), black-hole collapse (all screen lines converge to 1px then explode), CRT power-down flash. Progression rewards.
+**10. Warp-drive singularity exit effects** ✅ [DONE] — Three unlockable warp FX: vector expansion (default), black-hole collapse (all screen lines converge to 1px then explode), CRT power-down flash. Progression rewards. *(Default vector-expansion + CRT-bloom-flash variant shipped — fires on every warp jump; black-hole-collapse variant and the unlock-progression system deferred.)*
 
-**11. Engine dust trail** — Phos-green (`#39FF14`) vector particle trail proportional to ship velocity. Ambient cosmic dust sucked in at high speeds.
+**11. Engine dust trail** ✅ [DONE] — Phos-green (`#39FF14`) vector particle trail proportional to ship velocity. Ambient cosmic dust sucked in at high speeds.
 
-**12. Glitch tearing on crits** — Crit hit or large rift: vector lines duplicate, shake, tear across horizontal scanlines + white-noise screech.
+**12. Glitch tearing on crits** ✅ [DONE] — Crit hit or large rift: vector lines duplicate, shake, tear across horizontal scanlines + white-noise screech.
 
 ---
 
@@ -57,7 +57,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **16. Fuel clock / reactor drain** — Background drain; rate scales with equipped Reliquaries/weapons. Emergency Drift Mode at 0%: drift, shields fail, hull depletes. Fuel UI uses danger ramp from item 3.
 
-**17. Emergency heat vent** — Weapon overheat on rapid fire. Player-triggered coolant blowback: dense forward vector particles + instant reverse thrust, consumes fuel.
+**17. Emergency heat vent** ✅ [DONE] — Weapon overheat on rapid fire. Player-triggered coolant blowback: dense forward vector particles + instant reverse thrust, consumes fuel.
 
 **18. Gravity slingshot boosts** — Close orbit around heavy rifts gives free velocity boost. Tactical physics use.
 

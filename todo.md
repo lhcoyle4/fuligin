@@ -10,7 +10,7 @@ This document outlines the current developmental milestones for FULIGIN, alongsi
   - [ ] Implement angled viewport panel outlines (`ui_panel_angled`)
   - [ ] Integrate segmented bars for Chronicle/XP and shields (`ui_bar_segmented`)
   - [ ] Render discrete retro blocks for hull and core metrics (`ui_bar_block`)
-  - [ ] Apply screen-edge vignettes and scanline overlays
+  - [x] Apply screen-edge vignettes and scanline overlays
 - [ ] **Procedural World Generation & Seeding**
   - [ ] Integrate backing `WorldGenParams` struct in `include/game.h`
   - [ ] Support custom generation seeds for predictable sector maps
@@ -75,7 +75,7 @@ Adapt Rogue's classic monster behaviors to space entities:
 ## ─── LORE & RETRO-ARCADE FEATURE DESIGN ───
 
 ### 1. Phos-Green Engine Dust Trails (Visual/Flashy)
-- [ ] **Engine Particulate Drift:** Make the player's engine exhaust interact with floating cosmic dust. Moving at high speeds sucks in ambient particles, creating a brilliant glowing vector dust-trail proportional to ship velocity.
+- [x] **Engine Particulate Drift:** Make the player's engine exhaust interact with floating cosmic dust. Moving at high speeds sucks in ambient particles, creating a brilliant glowing vector dust-trail proportional to ship velocity.
 
 ### 2. "Cugel-9" Sarcastic Board Computer (Lore/Silly)
 - [ ] **Melancholic Text & Speech Logs:** A virtual intelligence terminal named `CUGEL-9` that prints status reports on the HUD and uses text-to-speech to speak them out loud.
@@ -94,13 +94,13 @@ Adapt Rogue's classic monster behaviors to space entities:
 - [x] **Musical Orb Gathering:** Vacuuming up multiple Chronicle Orbs in rapid succession plays sequential notes on a procedural FM-synth scale (e.g. pentatonic or minor chord arpeggios), rewarding combo chains with harmonious music.
 
 ### 6. Glitch Tearing Crit-Hits (Visual/Flashy)
-- [ ] **Matrix Disruption Frame-Hold:** Landing a critical strike or detonating a large rift causes the vector lines to briefly duplicate, shake, and tear across the horizontal scanlines, paired with a short white-noise audio screech.
+- [x] **Matrix Disruption Frame-Hold:** Landing a critical strike or detonating a large rift causes the vector lines to briefly duplicate, shake, and tear across the horizontal scanlines, paired with a short white-noise audio screech.
 
 ### 7. Emergency Heat Venting (Mechanic/Tactical)
-- [ ] **Coolant Blowback:** Rapid firing overheats the Autodyne weapons. The player can trigger an emergency vent that sprays superheated steam (dense vector line particles) forward, acting as an instant reverse thrust but consuming fuel.
+- [x] **Coolant Blowback:** Rapid firing overheats the Autodyne weapons. The player can trigger an emergency vent that sprays superheated steam (dense vector line particles) forward, acting as an instant reverse thrust but consuming fuel.
 
 ### 8. Warp-Drive Singularity Exit (Visual/Flashy)
-- [ ] **Warp Decal Configurations:** Unlock custom exit effects when jumping between loci. E.g., standard vector expansion, black-hole collapse (screen lines collapsing to a single pixel before exploding), or a static CRT screen-power-down flash.
+- [x] **Warp Decal Configurations:** Unlock custom exit effects when jumping between loci. E.g., standard vector expansion, black-hole collapse (screen lines collapsing to a single pixel before exploding), or a static CRT screen-power-down flash. *(Default vector-expansion + CRT-bloom-flash variant implemented on warp arrival; black-hole-collapse variant and the unlock progression deferred.)*
 
 ### 9. Dynamic CRT Glass Curvature (Visual/Aesthetic)
 - [ ] **Arcade Cabinet Curvature:** Add a toggleable pixel shader simulating the physical curved faceplate of a 1970s CRT vector arcade monitor, with subtle glass reflections on the corners.

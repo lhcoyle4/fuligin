@@ -805,6 +805,12 @@ static int   cur_beat          = 0;
 static float edge_flash_timer    = 0.0f;
 static float near_miss_cooldown  = 0.0f;
 
+/* --- Warp-drive singularity exit effect ---
+ * Counts down from WARP_FLASH_DUR after a warp jump. Drives an expanding
+ * vector ring + CRT bloom flash rendered in screen space (see render_overlays). */
+static float       warp_flash_timer = 0.0f;
+static const float WARP_FLASH_DUR   = 0.65f;
+
 /* --- Respawn animation state --- */
 static int   respawn_phase = 0;   /* 0=waiting, 1=blinking-in */
 static float respawn_blink = 0.0f;
@@ -2497,6 +2503,7 @@ static void handle_input_menus(SDL_Event *event)
                     camera_pos.x = player.pos.x - SCREEN_WIDTH  * 0.5f;
                     camera_pos.y = player.pos.y - SCREEN_HEIGHT * 0.5f;
                     vg_set_shake(6.0f, 0.3f);
+                    warp_flash_timer = WARP_FLASH_DUR;   /* trigger singularity exit FX */
                     game_state   = STATE_PLAYING;
                 }
             }
@@ -4367,6 +4374,8 @@ static void update_progression(float dt)
     }
     if (edge_flash_timer > 0.0f)
         edge_flash_timer -= dt;
+    if (warp_flash_timer > 0.0f)
+        warp_flash_timer -= dt;
 
     /* Score floaters: drift upward and fade */
     for (int i = 0; i < MAX_SCORE_FLOATS; i++) {
@@ -5730,6 +5739,49 @@ static void render_overlays(void)
         };
         Shape es = {el, 4, ef};
         vg_draw_shape(&es, (Vec2){0, 0}, 0.0f, 1.0f);
+    }
+
+    /* ── Warp-Drive Singularity Exit Effect ──────────────────────────
+     * Fires on every warp jump (todo §8 / action-list #10, "vector
+     * expansion" default variant). A CRT bloom flash washes the screen
+     * while three cyan vector rings expand outward from centre, reading
+     * as the Autodyne tearing back into realspace. Screen-space, additive.
+     * The 3-way unlockable FX progression in the spec is descoped to this
+     * single default variant for now. */
+    if (warp_flash_timer > 0.0f) {
+        float t    = warp_flash_timer / WARP_FLASH_DUR;   /* 1 -> 0 over effect */
+        float cx   = SCREEN_WIDTH  * 0.5f;
+        float cy   = SCREEN_HEIGHT * 0.5f;
+        float maxr = sqrtf(cx * cx + cy * cy);
+
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_ADD);
+
+        /* CRT bloom flash — brightest at the instant of arrival, eases out */
+        Uint8 fa = (Uint8)(t * t * 150.0f);
+        SDL_SetRenderDrawColor(g_renderer, 150, 230, 255, fa);
+        SDL_Rect warp_full = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+        SDL_RenderFillRect(g_renderer, &warp_full);
+
+        /* Expanding vector rings — staggered radii, fade as they reach edge */
+        for (int ring = 0; ring < 3; ring++) {
+            float prog = (1.0f - t) + (float)ring * 0.16f;
+            if (prog <= 0.0f || prog > 1.0f) continue;
+            float r  = prog * maxr;
+            Uint8 ra = (Uint8)((1.0f - prog) * 210.0f);
+            SDL_Color rc = HUD_TEXT_CYAN; rc.a = ra;
+            SDL_SetRenderDrawColor(g_renderer, rc.r, rc.g, rc.b, rc.a);
+            const int N = 48;
+            float px = cx + r, py = cy;     /* angle 0 */
+            for (int s = 1; s <= N; s++) {
+                float a  = (float)s / (float)N * 6.28318530718f;
+                float nx = cx + cosf(a) * r;
+                float ny = cy + sinf(a) * r;
+                SDL_RenderDrawLine(g_renderer, (int)px, (int)py, (int)nx, (int)ny);
+                px = nx; py = ny;
+            }
+        }
+
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
     }
 
     /* Autarch (god) mode banner */
