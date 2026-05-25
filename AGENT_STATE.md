@@ -9,21 +9,17 @@
 
 ## Claude
 *   **Current Branch:** `agent/claude`
-*   **Active Task:** Phase 2 — Noctis HUD overhaul + comprehensive settings system + procedural world gen
-*   **Locked Files/Paths:**
-    *   `src/game.c` — render_hud/minimap/overlays/menus rewrite; settings menu render; world gen integration
-    *   `include/game.h` — new Settings struct, WorldGenParams struct, expanded enums
-    *   `STYLE_GUIDE.md` — typography/color/layout update + settings UI style rules
-    *   `FULIGIN_HUD_DESIGN_BRIEF.md` — addendum with settings menu spec + world gen spec
+*   **Active Task:** Idle — Phase 2 complete, all locks released
+*   **Locked Files/Paths:** None
 
-### Claude Lock Detail
+### Claude — Last Completed (2026-05-25, commit 183b5a5)
 
-Started: 2026-05-25
-Phase 1 COMPLETE (pushed to agent/claude): include/ui.h + src/ui.c with HUD_* palette + 7 new primitives.
+Phase 2: Noctis HUD overhaul + comprehensive settings system
+- `include/ui.h` + `src/ui.c`: HUD_* palette, 7 new primitives (ui_panel_angled, ui_bar_segmented, ui_bar_block, ui_cursor_chevron, ui_section_divider, ui_warning_chevrons, ui_vignette)
+- `include/game.h`: Settings (9 categories), WorldGenParams, 3 new enums, 11 STATE_SETTINGS_* states
+- `src/game.c`: render_hud/minimap/overlays/menus rewritten in HUD_* + FF7R/CoQ terminal aesthetic; 9-tab settings menu; settings_save/load (fuligin.cfg)
+- `STYLE_GUIDE.md`: updated palette + typography + settings UI style rules
+- `FULIGIN_SETTINGS_SPEC.md`: full design spec (new file)
+Pushed to: lhcoyle4/fuligin (agent/claude) + lhcoyle4/asteroids_vectrex (agent/claude)
 
-Phase 2 IN PROGRESS — three parallel agents:
-- Agent A: STYLE_GUIDE.md + HUD design brief addendum (settings + world gen)
-- Agent B: include/game.h — Settings struct (video/controls/graphics/audio/accessibility/HUD/system/game-specific/world-gen), expanded save/load
-- Agent C: src/game.c — render_hud (angled panels, segmented bars), render_minimap, render_overlays, render_menus (full settings menu tree with all categories), procedural world gen seeding
-
-Do NOT edit the above files until Claude pushes the Phase 2 completion commit.
+**Next for Claude:** world gen seeding in game_init(), visual QA, PR agent/claude → antigravity
