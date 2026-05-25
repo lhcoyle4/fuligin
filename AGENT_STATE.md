@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: main
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Add FULIGIN_ACTION_LIST.md to repo
+- **Locked Files**: FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
