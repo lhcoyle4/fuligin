@@ -8,9 +8,9 @@
 
 ## Linux desktop
 *   **Current Branch:** `agent/gemini`
-*   **Active Task:** Idle (Waiting for Claude's UI locks to release)
+*   **Active Task:** Add TTS requirements to Cugel-9 in todo.md
 *   **Locked Files/Paths:**
-    *   None
+    *   `todo.md`
 
 ## Claude — Current Branch: antigravity, Active Task: FF7R/CoQ HUD UI Overhaul, Locked: STYLE_GUIDE.md, include/ui.h, src/ui.c, src/game.c
 
