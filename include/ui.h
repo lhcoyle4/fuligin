@@ -240,6 +240,20 @@ void ui_bar_block(SDL_Renderer *r, float x, float y,
                   float value, float maximum, int max_blocks,
                   SDL_Color fill);
 
+/**
+ * @brief Draw a dynamic combo multiplier UI.
+ *
+ * Displays a dynamic combo multiplier that reads the player's kill chain state and
+ * applies a random (dx, dy) jitter offset (screen shake) when the combo increases.
+ *
+ * @param r           SDL renderer
+ * @param x,y         Top-left origin of the text
+ * @param combo_count Current combo multiplier value
+ * @param combo_timer Time remaining on the combo
+ */
+void ui_combo_multiplier(SDL_Renderer *r, float x, float y, int combo_count, float combo_timer);
+
+
 /* =========================================================
  * TERMINAL MOTIFS
  * ========================================================= */
