@@ -24,7 +24,7 @@ LDFLAGS = -L"$(PROJ_DIR)/thirdparty/SDL2-2.30.3/x86_64-w64-mingw32/lib" \
           -lmingw32 -lSDL2main -lSDL2 -lSDL2_mixer
 
 # --- Sources ------------------------------------------------------------------
-SRC = src/main.c src/vector_graphics.c src/game.c src/vector_font.c src/audio.c
+SRC = src/main.c src/vector_graphics.c src/game.c src/vector_font.c src/audio.c src/ui.c
 OBJ = $(SRC:.c=.o)
 
 # --- Native target ------------------------------------------------------------

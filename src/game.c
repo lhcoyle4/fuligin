@@ -17,6 +17,7 @@
 #include "vector_graphics.h"
 #include "vector_font.h"
 #include "audio.h"
+#include "ui.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -4801,179 +4802,220 @@ static void render_hud(void)
     SDL_Color main_color = {220, 240, 255, 255};
     char hud_text[64];
 
-    /* Score — top-left */
-    sprintf(hud_text, "%05d", score);
-    vf_draw_string(hud_text, HUD_SCORE_X, HUD_SCORE_Y, 20, main_color);
+    /* ── Ambient particle drift — drawn before all panels ─────────── */
+    ui_particle_drift(g_renderer, game_time, 24);
 
-    /* Top score — top-centre */
-    sprintf(hud_text, "%05d",
-            high_scores[0].score > score ? high_scores[0].score : score);
-    vf_draw_string_centered(hud_text, SCREEN_WIDTH / 2.0f, HUD_TOPSCORE_Y,
-                            15, (SDL_Color){180, 220, 255, 180});
-
-    /* Player level — top-right */
-    sprintf(hud_text, "LVL %d", player_level);
+    /* ================================================================
+     * TOP-LEFT PANEL — CHRONICLE (score, level, wave, combo)
+     * x=8, y=8, w=230, h=128
+     * ================================================================ */
     {
-        float tw = (strlen(hud_text) * 14 * 1.2f) - (14 * 0.2f);
-        vf_draw_string(hud_text, SCREEN_WIDTH - 42.0f - tw, HUD_LEVEL_Y,
-                       14, (SDL_Color){120, 200, 255, 200});
+        float px = 8.0f, py = 8.0f, pw = 230.0f, ph = 128.0f;
+        SDL_Color zone_border = ui_zone_color(player_zone);
+
+        ui_panel(g_renderer, px, py, pw, ph, zone_border);
+        ui_scanlines(g_renderer, px, py, pw, ph);
+
+        /* Header */
+        SDL_Color hdr_cyan = {0, 200, 200, 160};
+        ui_panel_header(g_renderer, px, py, pw, "CHRONICLE", hdr_cyan);
+
+        /* Large score — "%06d", size 26 */
+        sprintf(hud_text, "%06d", score);
+        vf_draw_string(hud_text, px + 10.0f, py + 26.0f, 26, UI_WHITE);
+
+        /* LVL + WAVE row, size 10, UI_GREY */
+        sprintf(hud_text, "LVL %d", player_level);
+        vf_draw_string(hud_text, px + 10.0f, py + 62.0f, 10, UI_GREY);
+        sprintf(hud_text, "WAVE %d", level);
+        vf_draw_string(hud_text, px + 110.0f, py + 62.0f, 10, UI_GREY);
+
+        /* Combo row */
+        if (combo_count >= 2) {
+            SDL_Color combo_base = (combo_count >= 4) ? UI_GOLD : UI_AMBER;
+            SDL_Color combo_col  = ui_pulse(combo_base, game_time, 2.5f, 0.35f);
+            sprintf(hud_text, "x%d COMBO!", combo_count);
+            vf_draw_string(hud_text, px + 10.0f, py + 80.0f, 13, combo_col);
+        }
+
+        /* Dim top-score comparison label — centred inside panel */
+        if (high_scores[0].score > score) {
+            SDL_Color dim_col = {120, 140, 160, 100};
+            sprintf(hud_text, "BEST %06d", high_scores[0].score);
+            vf_draw_string_centered(hud_text, px + pw / 2.0f,
+                                    py + 106.0f, 9, dim_col);
+        }
     }
 
-    /* Combo indicator — centre, above lives row */
-    if (combo_count >= 2) {
-        SDL_Color cc = (combo_count >= 4)
-                       ? (SDL_Color){255,  80,  80, 255}
-                       : (SDL_Color){255, 200,  50, 255};
-        sprintf(hud_text, "x%d COMBO!", combo_count);
-        vf_draw_string_centered(hud_text, SCREEN_WIDTH / 2.0f,
-                                HUD_COMBO_Y, 18, cc);
-    }
-
-    /* Lives icons — one row below combo baseline (combo bottom ~y+18=86) */
-    for (int i = 0; i < lives - 1; i++) {
-        Shape s = {ship_lines, sizeof(ship_lines) / sizeof(Line), main_color};
-        Vec2 pos = {HUD_LIVES_X_BASE + i * HUD_LIVES_STEP, HUD_LIVES_Y};
-        vg_draw_shape(&s, pos, 0.0f, 0.7f);
-    }
-
-    /* ── XP bar — bottom edge ─────────────────────────────────────── */
-    float xp_percent  = (float)player_xp / xp_threshold;
-    SDL_Color xp_col  = (xp_flash_timer > 0.0f &&
-                         ((int)(xp_flash_timer * 20) % 2 == 0))
-                        ? (SDL_Color){255, 255, 255, 255}
-                        : (SDL_Color){100, 255, 100, 255};
-    float xp_bar_y  = (float)(SCREEN_HEIGHT - 22);
-    float xp_bar_x0 = 40.0f;
-    float xp_bar_x1 = (float)(SCREEN_WIDTH - 40);
-
-    /* Track (dim) */
+    /* ================================================================
+     * BOTTOM-LEFT PANEL — AUTODYNE STATUS (lives, chronicle/XP bar)
+     * x=8, y=SCREEN_HEIGHT-122, w=230, h=114
+     * ================================================================ */
     {
-        Vec2  p1 = {xp_bar_x0, xp_bar_y};
-        Vec2  p2 = {xp_bar_x1, xp_bar_y};
-        Line  l  = {p1, p2};
-        Shape s  = {&l, 1, (SDL_Color){50, 50, 50, 255}};
-        vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-    }
-    /* Fill */
-    {
-        Vec2  p1 = {xp_bar_x0, xp_bar_y};
-        Vec2  p2 = {xp_bar_x0 + (xp_bar_x1 - xp_bar_x0) * xp_percent,
-                    xp_bar_y};
-        Line  l  = {p1, p2};
-        Shape s  = {&l, 1, xp_col};
-        vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-    }
-    /* Labels: "XP" left, "current / threshold" right */
-    vf_draw_string("XP", xp_bar_x0, xp_bar_y - 16.0f, 11,
-                   (SDL_Color){80, 180, 80, 200});
-    sprintf(hud_text, "%d / %d", player_xp, xp_threshold);
-    {
-        float tw = (strlen(hud_text) * 10 * 1.2f) - (10 * 0.2f);
-        vf_draw_string(hud_text, xp_bar_x1 - tw, xp_bar_y - 15.0f, 10,
-                       (SDL_Color){80, 180, 80, 180});
-    }
+        float px = 8.0f;
+        float py = (float)(SCREEN_HEIGHT - 122);
+        float pw = 230.0f, ph = 114.0f;
+        SDL_Color zone_border = ui_zone_color(player_zone);
 
-    /* ── Fuel bar — one row above XP bar ─────────────────────────── */
-    {
-        float fpct      = (fuel_max > 0.0f) ? (fuel_current / fuel_max) : 0.0f;
-        SDL_Color fc    = fpct > 0.3f ? (SDL_Color){ 60, 220,  80, 200} :
-                          fpct > 0.1f ? (SDL_Color){255, 200,  40, 200} :
-                                        (SDL_Color){255,  60,  60, 220};
-        float fuel_bar_y = (float)(SCREEN_HEIGHT - 44);
-        float fbx0 = xp_bar_x0, fbx1 = xp_bar_x1;
+        ui_panel(g_renderer, px, py, pw, ph, zone_border);
+        ui_scanlines(g_renderer, px, py, pw, ph);
 
-        /* Track (dim) */
+        SDL_Color hdr_cyan = {0, 200, 200, 160};
+        ui_panel_header(g_renderer, px, py, pw, "AUTODYNE STATUS", hdr_cyan);
+
+        /* Lives icons — ship glyphs at scale 0.6, starting at y+28 */
         {
-            Vec2  p1 = {fbx0, fuel_bar_y};
-            Vec2  p2 = {fbx1, fuel_bar_y};
-            Line  l  = {p1, p2};
-            Shape s  = {&l, 1, (SDL_Color){40, 40, 40, 255}};
-            vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
+            SDL_Color ship_col = UI_WHITE;
+            Shape s = {ship_lines, sizeof(ship_lines) / sizeof(Line), ship_col};
+            int icon_count = lives - 1;
+            if (icon_count < 0) icon_count = 0;
+            for (int i = 0; i < icon_count; i++) {
+                Vec2 pos = {px + 18.0f + i * 22.0f, py + 42.0f};
+                vg_draw_shape(&s, pos, 0.0f, 0.6f);
+            }
         }
-        /* Fill */
+
+        /* Chronicle (XP) bar */
         {
-            Vec2  p1 = {fbx0, fuel_bar_y};
-            Vec2  p2 = {fbx0 + (fbx1 - fbx0) * fpct, fuel_bar_y};
-            Line  l  = {p1, p2};
-            Shape s  = {&l, 1, fc};
-            vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-        }
-        /* Labels: "FUEL" left, "NNN%" right */
-        vf_draw_string("FUEL", fbx0, fuel_bar_y - 16.0f, 11, fc);
-        char fbuf[16];
-        sprintf(fbuf, "%d%%", (int)(fpct * 100));
-        {
-            float tw = (strlen(fbuf) * 10 * 1.2f) - (10 * 0.2f);
-            vf_draw_string(fbuf, fbx1 - tw, fuel_bar_y - 15.0f, 10, fc);
+            float bar_x = px + 8.0f;
+            float bar_w = pw - 16.0f;
+            float bar_y = py + 68.0f;
+
+            /* Labels above bar */
+            SDL_Color xp_label_col = {57, 200, 20, 180};
+            vf_draw_string("CHRONICLE", bar_x, bar_y - 14.0f, 8,
+                           xp_label_col);
+            sprintf(hud_text, "%d / %d", player_xp, xp_threshold);
+            {
+                float tw = (float)strlen(hud_text) * 8.0f * 1.2f;
+                vf_draw_string(hud_text, bar_x + bar_w - tw,
+                               bar_y - 14.0f, 8, xp_label_col);
+            }
+
+            /* Bar fill — flash to UI_WHITE on xp_flash_timer */
+            SDL_Color xp_fill = UI_GREEN;
+            if (xp_flash_timer > 0.0f &&
+                ((int)(xp_flash_timer * 20) % 2 == 0)) {
+                xp_fill = UI_WHITE;
+            }
+            ui_bar(g_renderer, bar_x, bar_y, bar_w, 10.0f,
+                   (float)player_xp, (float)xp_threshold, xp_fill);
         }
     }
 
-    /* ── Resource readout — centred above bars ────────────────────── */
+    /* ================================================================
+     * BOTTOM-RIGHT PANEL — SYSTEMS (fuel, resources)
+     * x=SCREEN_WIDTH-238, y=SCREEN_HEIGHT-122, w=230, h=114
+     * ================================================================ */
     {
-        char rbuf[128];
-        sprintf(rbuf,
-                "VS:%d  AF:%d  HX:%d  AM:%d  RK:%d  CB:%d  IS:%d  CL:%d  MD:%d",
-                res_void_steel, res_autodyne_frags, res_hex_modules,
-                res_ammo, res_rockets, res_contraband,
-                res_isotopes, res_coolant, res_medicinals);
-        vf_draw_string_centered(rbuf, SCREEN_WIDTH / 2.0f,
-                                (float)(SCREEN_HEIGHT - 68), 9,
-                                (SDL_Color){140, 160, 180, 180});
-        if (res_contraband > 0) {
-            vf_draw_string_centered("! CONTRABAND ABOARD",
-                                    SCREEN_WIDTH / 2.0f,
-                                    (float)(SCREEN_HEIGHT - 80), 9,
-                                    (SDL_Color){255, 80, 80, 200});
+        float px = (float)(SCREEN_WIDTH - 238);
+        float py = (float)(SCREEN_HEIGHT - 122);
+        float pw = 230.0f, ph = 114.0f;
+        SDL_Color zone_border = ui_zone_color(player_zone);
+
+        ui_panel(g_renderer, px, py, pw, ph, zone_border);
+        ui_scanlines(g_renderer, px, py, pw, ph);
+
+        SDL_Color hdr_cyan = {0, 200, 200, 160};
+        ui_panel_header(g_renderer, px, py, pw, "SYSTEMS", hdr_cyan);
+
+        /* Fuel bar */
+        {
+            float fpct   = (fuel_max > 0.0f)
+                           ? (fuel_current / fuel_max) : 0.0f;
+            SDL_Color fc = ui_fuel_color(fpct);
+            float bar_x  = px + 8.0f;
+            float bar_w  = pw - 16.0f;
+            float bar_y  = py + 36.0f;
+
+            vf_draw_string("FUEL", bar_x, bar_y - 14.0f, 9, fc);
+            sprintf(hud_text, "%d%%", (int)(fpct * 100.0f));
+            {
+                float tw = (float)strlen(hud_text) * 9.0f * 1.2f;
+                vf_draw_string(hud_text, bar_x + bar_w - tw,
+                               bar_y - 14.0f, 9, fc);
+            }
+            ui_bar(g_renderer, bar_x, bar_y, bar_w, 10.0f,
+                   fuel_current, fuel_max, fc);
+        }
+
+        /* Resource grid — two rows, size 9 */
+        {
+            char rbuf[96];
+            float row_y1 = py + 62.0f;
+            float row_y2 = py + 76.0f;
+            float rx     = px + 8.0f;
+            SDL_Color res_col = {140, 160, 180, 200};
+
+            sprintf(rbuf, "VS:%d  AF:%d  HX:%d  AM:%d  RK:%d",
+                    res_void_steel, res_autodyne_frags, res_hex_modules,
+                    res_ammo, res_rockets);
+            vf_draw_string(rbuf, rx, row_y1, 9, res_col);
+
+            /* Row 2 — highlight in UI_CINNABAR if contraband aboard */
+            SDL_Color row2_col = (res_contraband > 0) ? UI_CINNABAR : res_col;
+            sprintf(rbuf, "CB:%d  IS:%d  CL:%d  MD:%d",
+                    res_contraband, res_isotopes, res_coolant, res_medicinals);
+            vf_draw_string(rbuf, rx, row_y2, 9, row2_col);
+        }
+
+        /* God-mode banner centred inside this panel */
+        if (god_mode_msg_timer > 0.0f) {
+            SDL_Color gm_col = god_mode
+                               ? UI_CINNABAR
+                               : (SDL_Color){100, 100, 255, 255};
+            const char *gm_str = god_mode
+                                 ? "GOD MODE: ENABLED"
+                                 : "GOD MODE: DISABLED";
+            vf_draw_string_centered(gm_str,
+                                    px + pw / 2.0f, py + ph / 2.0f + 10.0f,
+                                    11, gm_col);
         }
     }
 
-    /* ── Active-upgrade icon strip — right edge ───────────────────── */
+    /* ================================================================
+     * RELIC STRIP — active upgrade badges, right edge vertical strip
+     * x=SCREEN_WIDTH-45, stepping down from y=140
+     * ================================================================ */
     if (game_state == STATE_PLAYING || game_state == STATE_ATTRACT_GAMEPLAY) {
-        float ix = HUD_UPGRADE_X, iy = HUD_UPGRADE_Y0;
-        SDL_Color ic = {100, 220, 255, 180};
-        int iw = 10;
+        float ix = (float)(SCREEN_WIDTH - 45);
+        float iy = HUD_UPGRADE_Y0;
+        SDL_Color ic = {0, 220, 220, 180};   /* UI_CYAN at 180 alpha */
+
         if (player_upgrades.triple_shot)
-            { vf_draw_string("3X",  ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("3X",  ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.max_bounces > 0)
-            { vf_draw_string("BNC", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("BNC", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.shield_active)
-            { vf_draw_string("SHD", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("SHD", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.piercing)
-            { vf_draw_string("PRC", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("PRC", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.homing)
-            { vf_draw_string("HOM", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("HOM", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.rear_gun)
-            { vf_draw_string("RRG", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("RRG", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.thermal_hull)
-            { vf_draw_string("RAM", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("RAM", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.singularity_displacer)
-            { vf_draw_string("WRP", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("WRP", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.split_shot)
-            { vf_draw_string("SPL", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("SPL", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.resonance_cascade)
-            { vf_draw_string("RES", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("RES", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.mirror_image)
-            { vf_draw_string("TWN", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("TWN", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.phase_shift)
-            { vf_draw_string("PHS", ix, iy, iw,
+            { vf_draw_string("PHS", ix, iy, 9,
                              (SDL_Color){255, 200, 100, 180}); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.singularity_whip)
-            { vf_draw_string("BWP", ix, iy, iw, ic); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("BWP", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
+        if (player_upgrades.nova_explosion)
+            { vf_draw_string("NOV", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         (void)iy; /* suppress unused-after-last-write warning */
     }
 
-    /* God-mode notification banner */
-    if (god_mode_msg_timer > 0.0f) {
-        if (god_mode) {
-            vf_draw_string_centered("GOD MODE: ENABLED",
-                                    SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 50,
-                                    28, (SDL_Color){255,  50,  50, 255});
-        } else {
-            vf_draw_string_centered("GOD MODE: DISABLED",
-                                    SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 50,
-                                    28, (SDL_Color){100, 100, 255, 255});
-        }
-    }
+    /* suppress unused variable warning for main_color (kept per instructions) */
+    (void)main_color;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -4989,8 +5031,18 @@ static void render_minimap(void)
 {
     if (!minimap_visible) return;
 
-    float mmx  = (float)SCREEN_WIDTH - 205.0f;
-    float mmy  = 68.0f;
+    /* Panel geometry — wraps the map content with an 8px inset on each side */
+    float panel_x = (float)SCREEN_WIDTH - 205.0f;
+    float panel_y = 8.0f;
+    float panel_w = 197.0f;
+    float panel_h = 186.0f;
+
+    ui_panel(g_renderer, panel_x, panel_y, panel_w, panel_h,
+             ui_zone_color(player_zone));
+
+    /* Map area coordinates */
+    float mmx  = panel_x;
+    float mmy  = 32.0f;          /* below the panel header */
     float mmw  = 185.0f;
     float mmh  = 148.0f;
     float range = 3500.0f;
@@ -4999,32 +5051,16 @@ static void render_minimap(void)
     float mcx  = mmx + mmw * 0.5f;
     float mcy  = mmy + mmh * 0.5f;
 
+    /* Panel header — "URTHGRID" in zone accent color */
+    ui_panel_header(g_renderer, panel_x, 10.0f, panel_w, "URTHGRID",
+                    ui_zone_color(player_zone));
+
     /* Background scanlines */
     for (int row = 0; row <= 6; row++) {
         float ly = mmy + row * (mmh / 6.0f);
         Line  l  = {{mmx, ly}, {mmx + mmw, ly}};
         Shape s  = {&l, 1, (SDL_Color){0, 30, 50, 160}};
         vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-    }
-
-    /* Border — colour-coded by player zone */
-    {
-        Line border[4] = {
-            {{mmx,       mmy},       {mmx + mmw, mmy}},
-            {{mmx + mmw, mmy},       {mmx + mmw, mmy + mmh}},
-            {{mmx + mmw, mmy + mmh}, {mmx,       mmy + mmh}},
-            {{mmx,       mmy + mmh}, {mmx,       mmy}}
-        };
-        static SDL_Color zone_bdr[] = {
-            { 80, 255, 255, 200},
-            {120, 200, 255, 200},
-            {180,  80, 255, 200},
-            {255,  80,  80, 200}
-        };
-        for (int i = 0; i < 4; i++) {
-            Shape s = {&border[i], 1, zone_bdr[player_zone]};
-            vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-        }
     }
 
     /* Home station — cyan cross */
@@ -5209,13 +5245,10 @@ static void render_overlays(void)
 
     /* Shop overlay */
     if (game_state == STATE_SHOP) {
-        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(g_renderer, 0, 5, 15, 200);
-        SDL_Rect bg = {60, 40, SCREEN_WIDTH - 120, SCREEN_HEIGHT - 80};
-        SDL_RenderFillRect(g_renderer, &bg);
+        ui_panel(g_renderer, 50, 30, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 60,
+                 UI_CYAN);
         vf_draw_string_centered("HOME STATION EXCHANGE",
-                                SCREEN_WIDTH / 2.0f, 60, 20,
-                                (SDL_Color){100, 220, 255, 255});
+                                SCREEN_WIDTH / 2.0f, 60, 20, UI_CYAN);
         vf_draw_string_centered("[ ESC ] CLOSE",
                                 SCREEN_WIDTH / 2.0f, 88, 11,
                                 (SDL_Color){120, 120, 140, 200});
@@ -5229,13 +5262,11 @@ static void render_overlays(void)
         #define SHOP_TOTAL 14
         for (int si = 0; si < SHOP_TOTAL && si < SHOP_ITEMS_PER_PAGE; si++) {
             float iy = 115.0f + si * 42.0f;
-            SDL_Color ic = (si == shop_sel)
-                           ? (SDL_Color){255, 255, 80, 255}
-                           : (SDL_Color){180, 200, 220, 200};
+            SDL_Color ic = (si == shop_sel) ? UI_GOLD : UI_WHITE;
             if (si == shop_sel) {
-                SDL_SetRenderDrawColor(g_renderer, 40, 80, 120, 80);
-                SDL_Rect hr = {80, (int)iy - 4, SCREEN_WIDTH - 160, 36};
-                SDL_RenderFillRect(g_renderer, &hr);
+                ui_corner_brackets(g_renderer,
+                                   80, iy - 4, SCREEN_WIDTH - 160, 36,
+                                   UI_GOLD, 10.0f);
             }
             vf_draw_string(si == shop_sel ? "> " : "  ", 85.0f, iy, 13, ic);
             vf_draw_string(shop_names[si], 110.0f, iy, 13, ic);
@@ -5246,19 +5277,15 @@ static void render_overlays(void)
                 res_void_steel, res_autodyne_frags, res_hex_modules,
                 res_isotopes, res_ammo, res_rockets);
         vf_draw_string_centered(inv, SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT - 70, 10,
-                                (SDL_Color){140, 180, 200, 200});
+                                SCREEN_HEIGHT - 70, 10, UI_GREY);
     }
 
     /* Warp-menu overlay */
     if (game_state == STATE_WARP_MENU) {
-        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
-        SDL_SetRenderDrawColor(g_renderer, 0, 10, 30, 180);
-        SDL_Rect wbg = {200, 150, SCREEN_WIDTH - 400, SCREEN_HEIGHT - 300};
-        SDL_RenderFillRect(g_renderer, &wbg);
-        vf_draw_string_centered("WARP DRIVE -- SAVED LOCI",
-                                SCREEN_WIDTH / 2.0f, 165, 16,
-                                (SDL_Color){100, 220, 255, 255});
+        ui_panel(g_renderer, 190, 140, SCREEN_WIDTH - 380, SCREEN_HEIGHT - 280,
+                 UI_CYAN);
+        vf_draw_string_centered("WARP DRIVE \xe2\x80\x94 SAVED LOCI",
+                                SCREEN_WIDTH / 2.0f, 165, 16, UI_CYAN);
         if (warp_loc_count == 0) {
             vf_draw_string_centered("NO LOCI SAVED",
                                     SCREEN_WIDTH / 2.0f, 230, 11,
@@ -5272,10 +5299,10 @@ static void render_overlays(void)
                 int in_range = (wdist <= warp_drive_range) &&
                                (fuel_current >= 20.0f);
                 SDL_Color wc = (wi == warp_menu_sel)
-                               ? (SDL_Color){255, 255,  80, 255}
+                               ? UI_GOLD
                                : in_range
-                                 ? (SDL_Color){100, 255, 180, 220}
-                                 : (SDL_Color){180,  80,  80, 200};
+                                 ? UI_GREEN
+                                 : UI_CINNABAR;
                 char wbuf[80];
                 sprintf(wbuf, "%s  [%.0fu]%s",
                         warp_locs[wi].label, wdist,
@@ -5337,61 +5364,90 @@ static void render_overlays(void)
  */
 static void render_menus(void)
 {
-    SDL_Color main_color = {220, 240, 255, 255};
-
     /* =========== STATE: TITLE =========== */
     if (game_state == STATE_TITLE) {
         static float title_timer = 0.0f;
         title_timer += 0.016f;  /* visual-only timer, frame-rate dependence acceptable */
 
-        float title_sz = 55.0f * (1.0f + 0.05f * sinf(title_timer * 2.0f));
-        vf_draw_string_centered("FULIGIN",
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f - 160,
-                                title_sz, main_color);
+        /* Background atmosphere */
+        ui_particle_drift(g_renderer, game_time, 40);
+
+        /* Central hero panel */
+        ui_panel(g_renderer, 340, 200, 600, 520, UI_CYAN);
+
+        float panel_cx = 340.0f + 600.0f / 2.0f;  /* 640 */
+
+        /* Pulsing title */
+        float title_sz = 52.0f * (1.0f + 0.04f * sinf(title_timer * 2.0f));
+        vf_draw_string_centered("FULIGIN", panel_cx, 260, title_sz, UI_CYAN);
+
+        /* Subtitle — dim cyan */
+        SDL_Color dim_cyan = {0, 180, 180, 180};
         vf_draw_string_centered(
             "D R I F T I N G   A T   T H E   E D G E   O F   U R T H",
-            SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f - 70, 14,
-            (SDL_Color){100, 180, 255, 200});
+            panel_cx, 340, 11, dim_cyan);
 
-        SDL_Color c1 = (menu_selection == 0)
-                       ? (SDL_Color){255, 255, 100, 255} : main_color;
-        SDL_Color c2 = (menu_selection == 1)
-                       ? (SDL_Color){255, 255, 100, 255} : main_color;
-        SDL_Color c3 = (menu_selection == 2)
-                       ? (SDL_Color){255, 255, 100, 255} : main_color;
+        /* Thin separator at y=370 */
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(g_renderer, 26, 26, 46, 140);
+        SDL_RenderDrawLine(g_renderer, 350, 370, 930, 370);
 
-        vf_draw_string_centered("BEGIN DRIFT",    SCREEN_WIDTH/2.0f, SCREEN_HEIGHT/2.0f +  50, 22, c1);
-        vf_draw_string_centered("DRIFTER ANNALS", SCREEN_WIDTH/2.0f, SCREEN_HEIGHT/2.0f + 100, 22, c2);
-        vf_draw_string_centered("SETTINGS",       SCREEN_WIDTH/2.0f, SCREEN_HEIGHT/2.0f + 150, 22, c3);
-
-        { float tw = (strlen("BEGIN DRIFT") * 22 * 1.2f) - (22 * 0.2f);
-          if (menu_selection == 0)
-              vf_draw_string(">", SCREEN_WIDTH/2.0f - tw/2.0f - 40.0f,
-                             SCREEN_HEIGHT/2.0f + 50, 22, c1); }
-        { float tw = (strlen("DRIFTER ANNALS") * 22 * 1.2f) - (22 * 0.2f);
-          if (menu_selection == 1)
-              vf_draw_string(">", SCREEN_WIDTH/2.0f - tw/2.0f - 40.0f,
-                             SCREEN_HEIGHT/2.0f + 100, 22, c2); }
-        { float tw = (strlen("SETTINGS") * 22 * 1.2f) - (22 * 0.2f);
-          if (menu_selection == 2)
-              vf_draw_string(">", SCREEN_WIDTH/2.0f - tw/2.0f - 40.0f,
-                             SCREEN_HEIGHT/2.0f + 150, 22, c3); }
+        /* Menu items */
+        const char *menu_labels[] = {"BEGIN DRIFT", "DRIFTER ANNALS", "SETTINGS"};
+        float item_y_start = 400.0f;
+        float item_step    = 60.0f;
+        for (int i = 0; i < 3; i++) {
+            int   is_sel = (menu_selection == i);
+            SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+            float iy     = item_y_start + i * item_step;
+            vf_draw_string_centered(menu_labels[i], panel_cx, iy, 20, ic);
+            if (is_sel) {
+                /* Corner brackets: approx CX-120, iy-6, 240, 30 */
+                ui_corner_brackets(g_renderer,
+                                   panel_cx - 120.0f, iy - 6.0f,
+                                   240.0f, 30.0f,
+                                   UI_GOLD, 12.0f);
+            }
+        }
 
     /* =========== STATE: PAUSED =========== */
     } else if (game_state == STATE_PAUSED) {
-        vf_draw_string_centered("PAUSED",
-                                SCREEN_WIDTH / 2.0f, 70, 38,
-                                (SDL_Color){255, 255, 255, 255});
-        vf_draw_string_centered("S: SAVE GAME",
-                                SCREEN_WIDTH / 2.0f, 125, 20, main_color);
-        vf_draw_string_centered("L: LOAD GAME",
-                                SCREEN_WIDTH / 2.0f, 152, 20, main_color);
-        vf_draw_string_centered("Q: QUIT TO TITLE",
-                                SCREEN_WIDTH / 2.0f, 179, 20, main_color);
-        vf_draw_string_centered("ESC / SPACE: RESUME",
-                                SCREEN_WIDTH / 2.0f, 206, 16,
-                                (SDL_Color){150, 150, 180, 255});
+        /* Dark semi-transparent overlay */
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 160);
+        SDL_Rect overlay = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+        SDL_RenderFillRect(g_renderer, &overlay);
+
+        /* Center panel */
+        ui_panel(g_renderer, 200, 40, 880, SCREEN_HEIGHT - 80, UI_CYAN);
+
+        float panel_cx = 200.0f + 880.0f / 2.0f;  /* 640 */
+
+        /* Header */
+        vf_draw_string_centered("STASIS", panel_cx, 65, 32, UI_WHITE);
+
+        /* Pause options section */
+        ui_panel_header(g_renderer, 200, 105, 880, "PAUSE OPTIONS", UI_CYAN);
+
+        const char *pause_opts[] = {
+            "S: SAVE GAME",
+            "L: LOAD GAME",
+            "Q: QUIT TO TITLE",
+            "ESC/SPACE: RESUME"
+        };
+        float opt_y = 125.0f;
+        for (int i = 0; i < 4; i++) {
+            vf_draw_string_centered(pause_opts[i], panel_cx, opt_y, 17, UI_WHITE);
+            opt_y += 32.0f;
+        }
+
+        /* Separator at y=255 */
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(g_renderer, 26, 26, 46, 160);
+        SDL_RenderDrawLine(g_renderer, 210, 255, 1070, 255);
+
+        /* Relics section */
+        ui_panel_header(g_renderer, 200, 265, 880, "RELIQUARIES CARRIED", UI_CYAN);
 
         /* ── Relic log: map active upgrades to name+description rows ── */
         typedef struct { const char *name; const char *desc; } RelicEntry;
@@ -5430,79 +5486,71 @@ static void render_menus(void)
         #undef ADD_RELIC
 
         if (relic_count > 0) {
-            vf_draw_string_centered("YOUR RELICS",
-                                    SCREEN_WIDTH / 2.0f, 232, 15,
-                                    (SDL_Color){180, 255, 200, 180});
-            float ry    = 260.0f;
+            float ry    = 285.0f;
             int   shown = relic_count < 12 ? relic_count : 12;
             float row_h = (float)(SCREEN_HEIGHT - 310) / shown;
             if (row_h > 52.0f) row_h = 52.0f;
+            /* Icon col x=220, name col x=285, desc col x=560 */
             for (int i = 0; i < shown; i++) {
-                SDL_Color nc = {100, 220, 255, 220};
-                SDL_Color dc = {160, 160, 160, 200};
-                char nbuf[48];
-                sprintf(nbuf, "%-20s", relics[i].name);
-                vf_draw_string_centered(nbuf,
-                                        SCREEN_WIDTH / 2.0f - 60.0f, ry, 12, nc);
-                vf_draw_string_centered(relics[i].desc,
-                                        SCREEN_WIDTH / 2.0f + 50.0f, ry, 10, dc);
+                char icon[4] = {relics[i].name[0], relics[i].name[1],
+                                relics[i].name[2], '\0'};
+                vf_draw_string(icon,            220, ry, 11, UI_CYAN);
+                vf_draw_string(relics[i].name,  285, ry, 11, UI_CYAN);
+                vf_draw_string(relics[i].desc,  560, ry,  9, UI_GREY);
                 ry += row_h;
             }
         } else {
-            vf_draw_string_centered("NO RELICS EQUIPPED YET",
-                                    SCREEN_WIDTH / 2.0f, 240, 14,
-                                    (SDL_Color){120, 120, 120, 180});
+            vf_draw_string_centered("NO RELIQUARIES CARRIED",
+                                    panel_cx, 310, 14, UI_GREY);
         }
 
     /* =========== STATE: SETTINGS =========== */
     } else if (game_state == STATE_SETTINGS) {
         const char *tab_names[] = {"VIDEO", "AUDIO", "GAMEPLAY", "CONTROLS"};
-        vf_draw_string_centered("SETTINGS",
-                                SCREEN_WIDTH / 2.0f, 35, 22,
-                                (SDL_Color){150, 150, 255, 255});
 
-        /* Tab headers */
-        float tx = SCREEN_WIDTH / 2.0f - 280.0f;
+        /* Outer panel */
+        ui_panel(g_renderer, 100, 20, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 40, UI_STEEL);
+
+        float panel_cx = 100.0f + (SCREEN_WIDTH - 200) / 2.0f;  /* 640 */
+
+        /* Header */
+        vf_draw_string_centered("AUTODYNE CONFIGURATION", panel_cx, 45, 20, UI_CYAN);
+
+        /* Tab strip at y=75, each tab w=220 h=30, spaced 250px */
         for (int t = 0; t < 4; t++) {
-            SDL_Color tc = (t == settings_tab)
-                           ? (SDL_Color){255, 255,  80, 255}
-                           : (SDL_Color){100, 100, 160, 255};
-            vf_draw_string(tab_names[t], tx + t * 140.0f, 70, 16, tc);
+            float tx     = 120.0f + t * 250.0f;
+            int   is_sel = (t == settings_tab);
+            SDL_Color border = is_sel ? UI_CYAN : UI_STEEL;
+            ui_panel(g_renderer, tx, 75, 220, 30, border);
+            SDL_Color tc = is_sel ? UI_GOLD : UI_GREY;
+            vf_draw_string_centered(tab_names[t], tx + 110.0f, 83, 13, tc);
         }
-        vf_draw_string_centered("Q / E   OR   LB / RB   TO   SWITCH   TABS",
-                                SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 70, 11,
-                                (SDL_Color){100, 100, 120, 255});
-        vf_draw_string_centered("ESC TO RETURN",
-                                SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 48, 11,
-                                (SDL_Color){100, 100, 120, 255});
 
-        const char *on_off[]    = {"OFF", "ON"};
-        const char *dz_names[]  = {"LOW", "MED", "HIGH"};
-        const char *ch_names[]  = {"OFF", "CROSS", "DOT"};
+        const char *on_off[]     = {"OFF", "ON"};
+        const char *dz_names[]   = {"LOW", "MED", "HIGH"};
+        const char *ch_names[]   = {"OFF", "CROSS", "DOT"};
         const char *glow_names[] = {"OFF", "LOW", "MED", "HIGH", "MAX"};
-        float base_y = 130.0f;
-        float step   = 55.0f;
+        float base_y = 140.0f;
+        float step   = 52.0f;
 
         /* ── VIDEO tab ── */
         if (settings_tab == 0) {
-            const char *items[4];
             char bufs[4][64];
             sprintf(bufs[0], "DISPLAY:  < %s >",
                     settings_fullscreen ? "FULLSCREEN" : "WINDOWED");
             sprintf(bufs[1], "PHOSPHOR GLOW:  < %s >", glow_names[settings_glow]);
             sprintf(bufs[2], "SHOW FPS:  < %s >", on_off[settings_show_fps]);
             sprintf(bufs[3], "SCREEN SHAKE:  < %s >", on_off[settings_screen_shake]);
-            for (int i = 0; i < 4; i++) items[i] = bufs[i];
             for (int i = 0; i < 4; i++) {
-                SDL_Color ic = (menu_selection == i)
-                               ? (SDL_Color){255, 255, 80, 255} : main_color;
-                vf_draw_string_centered(items[i],
-                                        SCREEN_WIDTH / 2.0f, base_y + i * step,
-                                        18, ic);
-                if (menu_selection == i) {
-                    float tw = (strlen(items[i]) * 18 * 1.2f) - (18 * 0.2f);
-                    vf_draw_string(">", SCREEN_WIDTH / 2.0f - tw / 2.0f - 35.0f,
-                                   base_y + i * step, 18, ic);
+                int   is_sel = (menu_selection == i);
+                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+                float iy     = base_y + i * step;
+                vf_draw_string_centered(bufs[i], panel_cx, iy, 16, ic);
+                if (is_sel) {
+                    float bw = (float)strlen(bufs[i]) * 16 * 0.7f + 20.0f;
+                    ui_corner_brackets(g_renderer,
+                                       panel_cx - bw / 2.0f, iy - 8.0f,
+                                       bw, 24.0f, UI_GOLD, 10.0f);
                 }
             }
 
@@ -5516,35 +5564,35 @@ static void render_menus(void)
             sprintf(b4, "MUTE UNFOCUSED:  < %s >",  on_off[settings_mute_unfocused]);
             const char *items[] = {b0, b1, b2, b3, b4};
             for (int i = 0; i < 5; i++) {
-                SDL_Color ic = (menu_selection == i)
-                               ? (SDL_Color){255, 255, 80, 255} : main_color;
-                vf_draw_string_centered(items[i],
-                                        SCREEN_WIDTH / 2.0f, base_y + i * step,
-                                        18, ic);
-                if (menu_selection == i) {
-                    float tw = (strlen(items[i]) * 18 * 1.2f) - (18 * 0.2f);
-                    vf_draw_string(">", SCREEN_WIDTH / 2.0f - tw / 2.0f - 35.0f,
-                                   base_y + i * step, 18, ic);
+                int   is_sel = (menu_selection == i);
+                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+                float iy     = base_y + i * step;
+                vf_draw_string_centered(items[i], panel_cx, iy, 16, ic);
+                if (is_sel) {
+                    float bw = (float)strlen(items[i]) * 16 * 0.7f + 20.0f;
+                    ui_corner_brackets(g_renderer,
+                                       panel_cx - bw / 2.0f, iy - 8.0f,
+                                       bw, 24.0f, UI_GOLD, 10.0f);
                 }
             }
 
         /* ── GAMEPLAY tab ── */
         } else if (settings_tab == 2) {
             char b0[64], b1[64], b2[64];
-            sprintf(b0, "DIFFICULTY:  < %s >",    difficulty_names[difficulty]);
-            sprintf(b1, "AUTOFIRE:  < %s >",      on_off[settings_autofire]);
+            sprintf(b0, "DIFFICULTY:  < %s >",     difficulty_names[difficulty]);
+            sprintf(b1, "AUTOFIRE:  < %s >",       on_off[settings_autofire]);
             sprintf(b2, "INVERT MOUSE Y:  < %s >", on_off[settings_invert_y]);
             const char *items[] = {b0, b1, b2};
             for (int i = 0; i < 3; i++) {
-                SDL_Color ic = (menu_selection == i)
-                               ? (SDL_Color){255, 255, 80, 255} : main_color;
-                vf_draw_string_centered(items[i],
-                                        SCREEN_WIDTH / 2.0f, base_y + i * step,
-                                        18, ic);
-                if (menu_selection == i) {
-                    float tw = (strlen(items[i]) * 18 * 1.2f) - (18 * 0.2f);
-                    vf_draw_string(">", SCREEN_WIDTH / 2.0f - tw / 2.0f - 35.0f,
-                                   base_y + i * step, 18, ic);
+                int   is_sel = (menu_selection == i);
+                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+                float iy     = base_y + i * step;
+                vf_draw_string_centered(items[i], panel_cx, iy, 16, ic);
+                if (is_sel) {
+                    float bw = (float)strlen(items[i]) * 16 * 0.7f + 20.0f;
+                    ui_corner_brackets(g_renderer,
+                                       panel_cx - bw / 2.0f, iy - 8.0f,
+                                       bw, 24.0f, UI_GOLD, 10.0f);
                 }
             }
 
@@ -5559,82 +5607,83 @@ static void render_menus(void)
             sprintf(b4, "KEYBINDS  >");
             const char *items[] = {b0, b1, b2, b3, b4};
             for (int i = 0; i < 5; i++) {
-                SDL_Color ic = (menu_selection == i)
-                               ? (SDL_Color){255, 255, 80, 255} : main_color;
-                vf_draw_string_centered(items[i],
-                                        SCREEN_WIDTH / 2.0f, base_y + i * step,
-                                        18, ic);
-                if (menu_selection == i) {
-                    float tw = (strlen(items[i]) * 18 * 1.2f) - (18 * 0.2f);
-                    vf_draw_string(">", SCREEN_WIDTH / 2.0f - tw / 2.0f - 35.0f,
-                                   base_y + i * step, 18, ic);
+                int   is_sel = (menu_selection == i);
+                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+                float iy     = base_y + i * step;
+                vf_draw_string_centered(items[i], panel_cx, iy, 16, ic);
+                if (is_sel) {
+                    float bw = (float)strlen(items[i]) * 16 * 0.7f + 20.0f;
+                    ui_corner_brackets(g_renderer,
+                                       panel_cx - bw / 2.0f, iy - 8.0f,
+                                       bw, 24.0f, UI_GOLD, 10.0f);
                 }
             }
             if (g_controller) {
                 vf_draw_string_centered("CONTROLLER CONNECTED",
-                                        SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 100,
-                                        12, (SDL_Color){80, 200, 80, 255});
+                                        panel_cx, SCREEN_HEIGHT - 100,
+                                        12, UI_GREEN);
             }
         }
 
+        /* Bottom instructions */
+        SDL_Color dim_grey = {74, 74, 90, 160};
+        vf_draw_string_centered("Q / E   OR   LB / RB   TO   SWITCH   TABS",
+                                panel_cx, SCREEN_HEIGHT - 60, 10, dim_grey);
+        vf_draw_string_centered("ESC TO RETURN",
+                                panel_cx, SCREEN_HEIGHT - 42, 10, dim_grey);
+
     /* =========== STATE: KEYBINDS =========== */
     } else if (game_state == STATE_KEYBINDS) {
-        SDL_Color kb_tc = (keybind_page == 0)
-                          ? (SDL_Color){255, 255, 80, 255}
-                          : (SDL_Color){100, 100, 160, 255};
-        SDL_Color ct_tc = (keybind_page == 1)
-                          ? (SDL_Color){255, 255, 80, 255}
-                          : (SDL_Color){100, 100, 160, 255};
+        ui_panel(g_renderer, 80, 20, SCREEN_WIDTH - 160, SCREEN_HEIGHT - 40, UI_STEEL);
 
-        vf_draw_string_centered("KEYBINDS",
-                                SCREEN_WIDTH / 2.0f, 35, 22,
-                                (SDL_Color){150, 150, 255, 255});
-        vf_draw_string("KEYBOARD",   SCREEN_WIDTH / 2.0f - 200.0f, 70, 16, kb_tc);
-        vf_draw_string("CONTROLLER", SCREEN_WIDTH / 2.0f +  40.0f, 70, 16, ct_tc);
+        float panel_cx = 80.0f + (SCREEN_WIDTH - 160) / 2.0f;  /* 640 */
+
+        SDL_Color kb_tc = (keybind_page == 0) ? UI_GOLD : UI_GREY;
+        SDL_Color ct_tc = (keybind_page == 1) ? UI_GOLD : UI_GREY;
+
+        vf_draw_string_centered("KEYBINDS", panel_cx, 35, 22, UI_CYAN);
+        vf_draw_string("KEYBOARD",   panel_cx - 200.0f, 70, 16, kb_tc);
+        vf_draw_string("CONTROLLER", panel_cx +  40.0f, 70, 16, ct_tc);
+
+        SDL_Color dim_grey = {74, 74, 90, 160};
         vf_draw_string_centered("Q / E   TO   SWITCH   PAGES",
-                                SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 60, 11,
-                                (SDL_Color){100, 100, 120, 255});
+                                panel_cx, SCREEN_HEIGHT - 60, 11, dim_grey);
         vf_draw_string_centered("ESC TO RETURN",
-                                SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 38, 11,
-                                (SDL_Color){100, 100, 120, 255});
+                                panel_cx, SCREEN_HEIGHT - 38, 11, dim_grey);
 
         if (rebinding_action >= 0) {
             vf_draw_string_centered("PRESS ANY KEY",
-                                    SCREEN_WIDTH / 2.0f,
-                                    SCREEN_HEIGHT / 2.0f - 20, 28,
-                                    (SDL_Color){255, 200, 80, 255});
+                                    panel_cx,
+                                    SCREEN_HEIGHT / 2.0f - 20, 28, UI_AMBER);
             vf_draw_string_centered("ESC TO CANCEL",
-                                    SCREEN_WIDTH / 2.0f,
-                                    SCREEN_HEIGHT / 2.0f + 30, 16,
-                                    (SDL_Color){150, 150, 150, 255});
+                                    panel_cx,
+                                    SCREEN_HEIGHT / 2.0f + 30, 16, UI_GREY);
         } else if (ctrl_rebinding_action >= 0) {
             vf_draw_string_centered("PRESS CONTROLLER BUTTON",
-                                    SCREEN_WIDTH / 2.0f,
-                                    SCREEN_HEIGHT / 2.0f - 20, 24,
-                                    (SDL_Color){255, 180, 50, 255});
+                                    panel_cx,
+                                    SCREEN_HEIGHT / 2.0f - 20, 24, UI_AMBER);
             vf_draw_string_centered("START/BACK RESERVED   ESC TO CANCEL",
-                                    SCREEN_WIDTH / 2.0f,
-                                    SCREEN_HEIGHT / 2.0f + 30, 14,
-                                    (SDL_Color){150, 150, 150, 255});
+                                    panel_cx,
+                                    SCREEN_HEIGHT / 2.0f + 30, 14, UI_GREY);
         } else if (keybind_page == 0) {
             /* Keyboard binds list */
             vf_draw_string_centered("ENTER TO REBIND",
-                                    SCREEN_WIDTH / 2.0f, 100, 12,
-                                    (SDL_Color){100, 100, 120, 255});
+                                    panel_cx, 100, 12, dim_grey);
             float kb_row_h = (float)(SCREEN_HEIGHT - 160) / KB_COUNT;
             if (kb_row_h > 44.0f) kb_row_h = 44.0f;
             for (int i = 0; i < KB_COUNT; i++) {
-                SDL_Color ic = (keybind_selection == i)
-                               ? (SDL_Color){255, 255, 80, 255} : main_color;
+                int   is_sel = (keybind_selection == i);
+                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
                 const char *kname = SDL_GetScancodeName(keybinds[i]);
                 char row[64];
                 sprintf(row, "%-12s  %s", kb_action_names[i], kname);
                 float y = 120.0f + i * kb_row_h;
-                vf_draw_string_centered(row, SCREEN_WIDTH / 2.0f, y, 16, ic);
-                if (keybind_selection == i) {
-                    float tw = (strlen(row) * 16 * 1.2f) - (16 * 0.2f);
-                    vf_draw_string(">", SCREEN_WIDTH / 2.0f - tw / 2.0f - 30.0f,
-                                   y, 16, ic);
+                vf_draw_string_centered(row, panel_cx, y, 16, ic);
+                if (is_sel) {
+                    float bw = (float)strlen(row) * 16 * 0.7f + 20.0f;
+                    ui_corner_brackets(g_renderer,
+                                       panel_cx - bw / 2.0f, y - 8.0f,
+                                       bw, 24.0f, UI_GOLD, 10.0f);
                 }
             }
         } else {
@@ -5645,113 +5694,150 @@ static void render_menus(void)
                                          ctrl_binds, ct_action_names);
             if (!g_controller) {
                 vf_draw_string_centered("NO CONTROLLER DETECTED",
-                                        SCREEN_WIDTH / 2.0f,
+                                        panel_cx,
                                         SCREEN_HEIGHT - 90, 14,
-                                        (SDL_Color){255, 80, 80, 180});
+                                        UI_CINNABAR);
             }
         }
 
     /* =========== STATE: HIGH SCORES (DRIFTER ANNALS) =========== */
     } else if (game_state == STATE_HIGHSCORES) {
-        vf_draw_string_centered("THE FALLEN DRIFTERS",
-                                SCREEN_WIDTH / 2.0f, 100, 35,
-                                (SDL_Color){255, 220, 100, 255});
+        /* Background particles */
+        ui_particle_drift(g_renderer, game_time, 25);
+
+        /* Panel */
+        ui_panel(g_renderer, 280, 80, 720, 750, UI_GOLD);
+
+        float panel_cx = 280.0f + 720.0f / 2.0f;  /* 640 */
+
+        /* Header */
+        vf_draw_string_centered("THE FALLEN DRIFTERS", panel_cx, 115, 28, UI_GOLD);
+
+        /* Score entries */
         for (int i = 0; i < 5; i++) {
-            char sl[64];
-            sprintf(sl, "%d.  %s  %05d",
-                    i + 1, high_scores[i].initials, high_scores[i].score);
-            vf_draw_string_centered(sl, SCREEN_WIDTH / 2.0f,
-                                    220 + i * 50, 24, main_color);
+            float ey = 210.0f + i * 90.0f;
+            char rank_buf[4];
+            sprintf(rank_buf, "%d.", i + 1);
+            vf_draw_string_centered(rank_buf,                  panel_cx - 160.0f, ey, 20, UI_GREY);
+            vf_draw_string_centered(high_scores[i].initials,   panel_cx -  40.0f, ey, 20, UI_CYAN);
+            char score_buf[16];
+            sprintf(score_buf, "%05d", high_scores[i].score);
+            vf_draw_string_centered(score_buf,                 panel_cx + 120.0f, ey, 20, UI_WHITE);
+            /* AUTARCH label above top entry */
+            if (i == 0) {
+                vf_draw_string_centered("AUTARCH", panel_cx, ey - 20.0f, 9, UI_GOLD);
+            }
         }
+
+        /* Instruction */
         vf_draw_string_centered("PRESS SPACE TO RETURN TO THE DRIFT",
-                                SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 100, 14,
-                                (SDL_Color){180, 180, 180, 255});
+                                panel_cx, SCREEN_HEIGHT - 80, 12, UI_GREY);
 
     /* =========== STATE: GAME OVER =========== */
     } else if (game_state == STATE_GAMEOVER) {
-        vf_draw_string_centered("DRIFT ENDS",
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f - 80, 45,
-                                (SDL_Color){255, 80, 80, 255});
+        /* Background particles with cinnabar tint */
+        ui_particle_drift(g_renderer, game_time, 50);
+
+        /* Panel */
+        ui_panel(g_renderer, 290, 280, 700, 340, UI_CINNABAR);
+
+        float panel_cx = 290.0f + 700.0f / 2.0f;  /* 640 */
+
+        vf_draw_string_centered("DRIFT ENDS", panel_cx, 315, 42, UI_CINNABAR);
+
+        SDL_Color dim_white = {240, 240, 240, 160};
         vf_draw_string_centered("THE AUTODYNE IS LOST TO THE VOID",
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f - 10, 14,
-                                (SDL_Color){200, 180, 180, 255});
+                                panel_cx, 380, 13, dim_white);
+
+        char final_score[48];
+        sprintf(final_score, "FINAL CHRONICLE: %d", score);
+        vf_draw_string_centered(final_score, panel_cx, 420, 18, UI_WHITE);
+
         vf_draw_string_centered("PRESS ENTER TO DRIFT AGAIN",
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f + 40, 18, main_color);
+                                panel_cx, 475, 16, UI_AMBER);
 
     /* =========== STATE: NEW HIGH SCORE =========== */
     } else if (game_state == STATE_NEW_HIGHSCORE) {
-        vf_draw_string_centered("NEW DRIFTER RECORD!",
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f - 100, 28,
-                                (SDL_Color){255, 240, 80, 255});
-        vf_draw_string_centered("INSCRIBE YOUR MARK:",
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f - 30, 20, main_color);
+        /* Panel */
+        ui_panel(g_renderer, 340, 280, 600, 340, UI_GOLD);
+
+        float panel_cx = 340.0f + 600.0f / 2.0f;  /* 640 */
+
+        vf_draw_string_centered("NEW DRIFTER RECORD!", panel_cx, 310, 24, UI_GOLD);
+
+        char score_buf[32];
+        sprintf(score_buf, "%d", score);
+        vf_draw_string_centered(score_buf, panel_cx, 350, 16, UI_WHITE);
+
+        vf_draw_string_centered("INSCRIBE YOUR MARK:", panel_cx, 390, 18, UI_WHITE);
+
         char di[8];
         sprintf(di, "%c %c %c",
                 temp_initials[0], temp_initials[1], temp_initials[2]);
-        vf_draw_string_centered(di,
-                                SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT / 2.0f + 30, 30, main_color);
+        vf_draw_string_centered(di, panel_cx, 440, 28, UI_CYAN);
 
     /* =========== STATE: UPGRADE SELECT (RELIC CHOICE) =========== */
     } else if (game_state == STATE_UPGRADE_SELECT) {
         static float upgrade_pulse = 0.0f;
         upgrade_pulse += 0.04f; /* visual-only timer */
 
-        float sz = 25.0f + 2.0f * sinf(upgrade_pulse * 3.0f);
+        /* Background particles */
+        ui_particle_drift(g_renderer, game_time, 30);
+
+        /* Pulsing header */
+        float sz = 24.0f + 2.0f * sinf(upgrade_pulse * 3.0f);
         vf_draw_string_centered("CHRONICLE SURGE!",
-                                SCREEN_WIDTH / 2.0f, 95, sz,
-                                (SDL_Color){120, 255, 160, 255});
+                                SCREEN_WIDTH / 2.0f, 80, sz, UI_GREEN);
         vf_draw_string_centered("CHOOSE YOUR RELIC",
-                                SCREEN_WIDTH / 2.0f, 150, 16,
-                                (SDL_Color){200, 200, 200, 255});
-        vf_draw_string_centered("WASD / ARROW KEYS + ENTER",
-                                SCREEN_WIDTH / 2.0f, 175, 12,
-                                (SDL_Color){120, 120, 120, 255});
+                                SCREEN_WIDTH / 2.0f, 130, 14, UI_GREY);
+        SDL_Color dim_grey = {74, 74, 90, 160};
+        vf_draw_string_centered("WASD / ARROWS + ENTER",
+                                SCREEN_WIDTH / 2.0f, 155, 11, dim_grey);
+
+        /* 3 relic cards in a row:
+         * Card w=340, h=180, spacing=20
+         * Total = 340*3 + 20*2 = 1060, start_x = (1280-1060)/2 = 110 */
+        float card_w   = 340.0f;
+        float card_h   = 180.0f;
+        float card_gap = 20.0f;
+        float card_sx  = 110.0f;
+        float card_y   = 200.0f;
 
         for (int i = 0; i < 3; i++) {
-            int is_sel   = (i == selected_option);
-            float pulse_s = is_sel
-                            ? (1.0f + 0.06f * sinf(upgrade_pulse * 5.0f + i))
-                            : 1.0f;
-            SDL_Color col = is_sel
-                            ? (SDL_Color){255, 255,  80, 255}
-                            : (SDL_Color){140, 140, 140, 255};
-            float y_pos = 250.0f + i * 90.0f;
+            int   is_sel     = (i == selected_option);
+            float cx         = card_sx + i * (card_w + card_gap);
+            SDL_Color border = is_sel ? UI_GOLD : UI_STEEL;
 
-            /* Selection bracket box */
+            ui_panel(g_renderer, cx, card_y, card_w, card_h, border);
+
             if (is_sel) {
-                float bw = 300.0f, bh = 70.0f;
-                float bx = SCREEN_WIDTH / 2.0f - bw / 2.0f - 10.0f;
-                float by = y_pos - 15.0f;
-                Line  bl[4] = {
-                    {{bx,      by},      {bx + bw, by}},
-                    {{bx + bw, by},      {bx + bw, by + bh}},
-                    {{bx + bw, by + bh}, {bx,      by + bh}},
-                    {{bx,      by + bh}, {bx,      by}}
-                };
-                Shape bs = {bl, 4, (SDL_Color){255, 255, 80, 60}};
-                vg_draw_shape(&bs, (Vec2){0, 0}, 0.0f, 1.0f);
+                ui_corner_brackets(g_renderer, cx, card_y, card_w, card_h,
+                                   UI_GOLD, 16.0f);
             }
 
-            char ot[64];
-            sprintf(ot, "%s", upgrade_names[upgrade_options[i]]);
-            vf_draw_string_centered(ot, SCREEN_WIDTH / 2.0f,
-                                    y_pos, 20 * pulse_s, col);
+            float card_cx = cx + card_w / 2.0f;
+            float name_sz = is_sel
+                            ? (18.0f * (1.0f + 0.05f * sinf(upgrade_pulse * 5.0f + i)))
+                            : 14.0f;
+            SDL_Color nc  = is_sel ? UI_GOLD : UI_GREY;
+
+            vf_draw_string_centered(upgrade_names[upgrade_options[i]],
+                                    card_cx, 250, name_sz, nc);
+
+            /* Separator line at y=280 */
+            SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+            SDL_SetRenderDrawColor(g_renderer, 26, 26, 46, 120);
+            SDL_RenderDrawLine(g_renderer, (int)(cx + 4), 280,
+                               (int)(cx + card_w - 4), 280);
+
+            /* Description */
+            vf_draw_string_centered(upgrade_descs[upgrade_options[i]],
+                                    card_cx, 295, 10, UI_GREY);
+
             if (is_sel) {
-                vf_draw_string_centered(upgrade_descs[upgrade_options[i]],
-                                        SCREEN_WIDTH / 2.0f,
-                                        y_pos + 28, 11,
-                                        (SDL_Color){190, 190, 190, 255});
-                float tw = (strlen(upgrade_names[upgrade_options[i]]) * 20 * 1.2f)
-                           - (20 * 0.2f);
-                vf_draw_string(">",
-                               SCREEN_WIDTH / 2.0f - tw / 2.0f - 40.0f,
-                               y_pos, 20, col);
+                /* "PRESS ENTER" hint at card bottom */
+                SDL_Color dim_amber = {255, 140, 0, 140};
+                vf_draw_string_centered("PRESS ENTER", card_cx, 355, 9, dim_amber);
             }
         }
     }
@@ -5801,6 +5887,5 @@ void game_render(void)
     /* Menus and full-screen states — always screen space */
     vg_set_camera((Vec2){0.0f, 0.0f});
     render_menus();
-
     vg_present();
 }
