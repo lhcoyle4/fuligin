@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Score/Event Floats — typed event floats with color, label, scale pulse (Action List item 7)
+- **Locked Files**: src/game.c
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
