@@ -1,42 +1,43 @@
 #include "ai.h"
 #include <math.h>
 
-// Flocking behavior for Ascian swarm
+// Rigid hexagon formation for Ascian swarm
 void ai_update_ascian_swarm(ai_entity_t* entities, int count, float dt) {
     if (count <= 0 || !entities) return;
 
+    int max_squad = 6;
+    int dead = max_squad - count;
+    if (dead < 0) dead = 0;
+    float speed_mult = 1.0f + dead * 0.15f;
+
+    // Find center of mass
+    float cx = 0, cy = 0;
     for (int i = 0; i < count; ++i) {
-        float cx = 0, cy = 0;
-        int neighbors = 0;
+        cx += entities[i].x;
+        cy += entities[i].y;
+    }
+    cx /= count;
+    cy /= count;
+
+    float radius = 50.0f;
+    float pi = 3.14159265358979323846f;
+
+    for (int i = 0; i < count; ++i) {
+        // Hexagon position relative to center
+        float angle = i * (2.0f * pi / max_squad);
+        float target_x = cx + radius * cosf(angle);
+        float target_y = cy + radius * sinf(angle);
         
-        // Simple cohesion
-        for (int j = 0; j < count; ++j) {
-            if (i == j) continue;
-            float dx = entities[j].x - entities[i].x;
-            float dy = entities[j].y - entities[i].y;
-            float dist2 = dx * dx + dy * dy;
-            if (dist2 < 10000.0f) { // Arbitrary radius
-                cx += entities[j].x;
-                cy += entities[j].y;
-                neighbors++;
-            }
-        }
+        // Steer towards target slot
+        float dir_x = target_x - entities[i].x;
+        float dir_y = target_y - entities[i].y;
         
-        if (neighbors > 0) {
-            cx /= neighbors;
-            cy /= neighbors;
-            
-            // Steer towards center of mass
-            float dir_x = cx - entities[i].x;
-            float dir_y = cy - entities[i].y;
-            
-            entities[i].vx += dir_x * 0.01f * dt;
-            entities[i].vy += dir_y * 0.01f * dt;
-        }
+        entities[i].vx += dir_x * 0.01f * speed_mult * dt;
+        entities[i].vy += dir_y * 0.01f * speed_mult * dt;
         
         // Update positions
-        entities[i].x += entities[i].vx * dt;
-        entities[i].y += entities[i].vy * dt;
+        entities[i].x += entities[i].vx * speed_mult * dt;
+        entities[i].y += entities[i].vy * speed_mult * dt;
     }
 }
 
