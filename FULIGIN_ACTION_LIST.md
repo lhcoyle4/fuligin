@@ -35,9 +35,9 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **7. Score / event floats** *(terminal style)* — `Share Tech Mono`, all-caps, scale-up-and-fade over 1.5s. URTH CYAN for Chronicle gain, CINNABAR for damage, ACID GREEN for resource pickup. Format matches item card stat style from `FULIGIN_Guide.pdf` p.2.
 
-**8. Zone transition banner** *(terminal style)* — `>>> ENTERING IRON SHOALS <<<` slides in at top, monospace, GHOST WHITE with full URTH CYAN glow. Bracket-corner framing. Reference: todo.md zone transition spec.
+**8. Zone transition banner** *(terminal style)* ✅ [DONE] — `>>> ENTERING IRON SHOALS <<<` slides in at top, monospace, GHOST WHITE with full URTH CYAN glow. Bracket-corner framing. Reference: todo.md zone transition spec.
 
-**9. Vector stress-cracking** — High-value asteroids display spreading wireframe fractures before shattering. URTH CYAN cracks, CINNABAR flash at break point.
+**9. Vector stress-cracking** ✅ [DONE] — High-value asteroids display spreading wireframe fractures before shattering. URTH CYAN cracks, CINNABAR flash at break point.
 
 **10. Warp-drive singularity exit effects** — Three unlockable warp FX: vector expansion (default), black-hole collapse (all screen lines converge to 1px then explode), CRT power-down flash. Progression rewards.
 
@@ -51,7 +51,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **13. Zone transition system** — Five zones (HOME STATION → SCRAP FIELDS → IRON SHOALS → VOID REACHES → DEEP DRIFT), danger/density scaling outward. Warp loci as fixed nav beacons. Zone entry triggers banner (item 8).
 
-**14. Proximity danger alert** *(terminal style)* — Pulsing `>>> DANGER <<<` at bottom-center, CINNABAR, monospace. Matches the terminal bracket-flash style from `vibe_presentation.html`.
+**14. Proximity danger alert** *(terminal style)* ✅ [DONE] — Pulsing `>>> DANGER <<<` at bottom-center, CINNABAR, monospace. Matches the terminal bracket-flash style from `vibe_presentation.html`.
 
 **15. Remnant debris / hidden hazards** — Invisible spatial hazards only revealed with PALE SIGHT Reliquary. No visual cue until equipped.
 
@@ -99,7 +99,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **31. Dynamic CRT glass curvature** — Toggleable shader: 1970s CRT curved faceplate + subtle glass corner reflections. Off by default.
 
-**32. Chronicle chord harmonics** — Rapid orb pickup → sequential FM-synth pentatonic notes. Combo chain = arpeggio.
+**32. Chronicle chord harmonics** ✅ [DONE] — Rapid orb pickup → sequential FM-synth pentatonic notes. Combo chain = arpeggio.
 
 ---
 

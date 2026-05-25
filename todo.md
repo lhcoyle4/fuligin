@@ -18,17 +18,17 @@ This document outlines the current developmental milestones for FULIGIN, alongsi
 - [ ] **Comprehensive Settings System**
   - [ ] Implement multi-tab settings UI tree (Video, Audio, Gameplay, Controls)
   - [ ] Support dynamic range, mute on focus loss, screen shake scaling, and deadzones
-- [ ] **Zone Transition Banners**
-  - [ ] Slide in/out `>>> ENTERING [ZONE] <<<` overlays at the top of the screen on warping
-- [ ] **Proximity Danger Alert**
-  - [ ] Pulse a flashing `>>> DANGER <<<` alert at bottom-center when enemies are close
+- [x] **Zone Transition Banners**
+  - [x] Slide in/out `>>> ENTERING [ZONE] <<<` overlays at the top of the screen on warping
+- [x] **Proximity Danger Alert**
+  - [x] Pulse a flashing `>>> DANGER <<<` alert at bottom-center when enemies are close
 - [ ] **Remnant Debris (Hidden Hazards)**
   - [ ] Code invisible spatial hazards and ghost asteroids requiring the `PALE SIGHT` upgrade
 - [ ] **High-Zone specialized Enemies**
   - [ ] *Ascians:* Voiceless interceptors patrolling in rigid geometric trajectories
   - [ ] *Lictors:* Elite, aggressive interceptor saucers that pursue the Autodyne at high speeds
-- [ ] **Cacogen UFO Auditory Signature**
-  - [ ] Synthesize procedural oscillating hums in `src/audio.c` for active saucers
+- [x] **Cacogen UFO Auditory Signature**
+  - [x] Synthesize procedural oscillating hums in `src/audio.c` for active saucers
 
 ---
 
@@ -88,10 +88,10 @@ Adapt Rogue's classic monster behaviors to space entities:
   - [ ] The player must steer the Autodyne into the physical shadow cast by large asteroids (rendering a dynamic vector shadow line) to shield themselves from system damage.
 
 ### 4. Vector Stress-Cracking (Visual/Flashy)
-- [ ] **Structural Strain Outlines:** High-value metal and crystal asteroids display glowing wireframe stress cracks as they take damage, giving immediate visual feedback before they shatter.
+- [x] **Structural Strain Outlines:** High-value metal and crystal asteroids display glowing wireframe stress cracks as they take damage, giving immediate visual feedback before they shatter.
 
 ### 5. Chronicle Chord Harmonics (Audio/Flashy)
-- [ ] **Musical Orb Gathering:** Vacuuming up multiple Chronicle Orbs in rapid succession plays sequential notes on a procedural FM-synth scale (e.g. pentatonic or minor chord arpeggios), rewarding combo chains with harmonious music.
+- [x] **Musical Orb Gathering:** Vacuuming up multiple Chronicle Orbs in rapid succession plays sequential notes on a procedural FM-synth scale (e.g. pentatonic or minor chord arpeggios), rewarding combo chains with harmonious music.
 
 ### 6. Glitch Tearing Crit-Hits (Visual/Flashy)
 - [ ] **Matrix Disruption Frame-Hold:** Landing a critical strike or detonating a large rift causes the vector lines to briefly duplicate, shake, and tear across the horizontal scanlines, paired with a short white-noise audio screech.

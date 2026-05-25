@@ -238,6 +238,8 @@ typedef struct {
     int   line_count;
     int   has_shield;              /* 1 = shielded (requires extra hit, level >= 3) */
     int   material;                /* 0=rock  1=metal  2=crystal */
+    int   hit_count;               /* total hits received (for stress-crack rendering) */
+    int   health;                  /* hit points remaining; metal/crystal size-3 start at 2 */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;
@@ -633,9 +635,17 @@ static int         selected_option = 0;
 
 /* --- Camera & world --- */
 static Vec2  camera_pos        = {0.0f, 0.0f};
-static int   player_zone       = 0;
-static float player_dist_origin = 0.0f;
-static float home_station_angle = 0.0f;
+static int   player_zone            = 0;
+static float player_dist_origin     = 0.0f;
+static float home_station_angle     = 0.0f;
+
+/* --- Zone transition banner --- */
+static float zone_banner_timer      = 0.0f;   /* seconds remaining; 0 = hidden */
+static int   zone_banner_prev_zone  = -1;     /* -1 = not yet initialised */
+
+/* --- Chronicle chord harmonics --- */
+static float orb_chord_timer        = 0.0f;   /* window for rapid-collection chain */
+static int   orb_chord_note         = 0;      /* next pentatonic note index [0-4] */
 static int   minimap_visible   = 1;
 
 /* --- Screen shake --- */
@@ -1328,6 +1338,22 @@ static void spawn_asteroid(Vec2 pos, int size)
             init_asteroid_shape(&asteroids[i], size);
             asteroids[i].has_shield =
                 (level >= 3 && rand() % 100 < (15 + difficulty * 10));
+            /* Material: 0=rock (common), 1=metal, 2=crystal.
+             * Chance of rare materials scales with player level. */
+            {
+                int r = rand() % 100;
+                int metal_chance   = 15 + level * 2;
+                int crystal_chance = 5  + level;
+                if (r < crystal_chance)               asteroids[i].material = 2;
+                else if (r < metal_chance + crystal_chance) asteroids[i].material = 1;
+                else                                  asteroids[i].material = 0;
+            }
+            asteroids[i].hit_count = 0;
+            /* Metal (1) and crystal (2) size-3 asteroids are tougher — two hits
+             * before shattering, giving the player time to see stress cracks. */
+            asteroids[i].health = (size == 3
+                                   && (asteroids[i].material == 1
+                                       || asteroids[i].material == 2)) ? 2 : 1;
             break;
         }
     }
@@ -3630,7 +3656,16 @@ static void update_particles_orbs_npcs(float dt)
             orbs[i].active = 0;
             int gained = (int)(orbs[i].value * player_upgrades.xp_mult);
             player_xp += gained;
-            audio_play(SFX_EXPLOSION_SM);
+            /* Chronicle Chord Harmonics: rapid collection plays ascending
+             * pentatonic minor scale (C Eb F G Bb) for a harmonious chain. */
+            if (orb_chord_timer > 0.0f) {
+                audio_play(SFX_CHORD_C4 + (orb_chord_note % 5));
+                orb_chord_note = (orb_chord_note + 1) % 5;
+            } else {
+                audio_play(SFX_EXPLOSION_SM);
+                orb_chord_note = 0;
+            }
+            orb_chord_timer = 0.5f;   /* 0.5 s window to chain the next orb */
             if (player_xp >= xp_threshold) {
                 player_xp      -= xp_threshold;
                 player_level++;
@@ -3648,6 +3683,14 @@ static void update_particles_orbs_npcs(float dt)
         player_dist_origin = sqrtf(player.pos.x * player.pos.x
                                    + player.pos.y * player.pos.y);
         player_zone = get_zone(player.pos);
+
+        /* Zone Transition Banner: detect zone change and start the display timer */
+        if (zone_banner_prev_zone < 0) {
+            zone_banner_prev_zone = player_zone;   /* silent init on first frame */
+        } else if (zone_banner_prev_zone != player_zone) {
+            zone_banner_timer     = 2.5f;          /* 0.4s fade-in, 1.7s hold, 0.4s fade-out */
+            zone_banner_prev_zone = player_zone;
+        }
     }
     home_station_angle += 0.004f * dt * 60.0f;
     (void)structures; /* Structures are indestructible this build */
@@ -3904,6 +3947,21 @@ static void update_collisions(float dt)
                         }
                     }
                 }
+            }
+
+            /* Vector Stress-Cracking: metal/crystal size-3 asteroids absorb the
+             * first hit — spawn amber/teal crack particles and survive. The visual
+             * crack lines are rendered below (render_entities) while health > 0. */
+            asteroids[a].hit_count++;
+            if (asteroids[a].health > 1) {
+                asteroids[a].health--;
+                SDL_Color crack_col = (asteroids[a].material == 2)
+                    ? (SDL_Color){80,  255, 200, 255}   /* crystal: ice-teal  */
+                    : (SDL_Color){255, 180,  60, 255};  /* metal:   amber-gold */
+                spawn_particles(asteroids[a].pos, 10, crack_col);
+                audio_play(SFX_EXPL_ROCK_SM);
+                if (!player_upgrades.piercing) bullets[b].active = 0;
+                break;  /* asteroid survives this hit — skip destroy logic */
             }
 
             /* Destroy the Void Stone */
@@ -4274,6 +4332,14 @@ static void update_progression(float dt)
     /* God-mode message banner decay */
     if (god_mode_msg_timer > 0.0f)
         god_mode_msg_timer -= dt;
+
+    /* Zone transition banner decay */
+    if (zone_banner_timer > 0.0f)
+        zone_banner_timer -= dt;
+
+    /* Chronicle chord harmonics: orb-chain collection window */
+    if (orb_chord_timer > 0.0f)
+        orb_chord_timer -= dt;
 }
 
 /* ================================================================== */
@@ -4899,6 +4965,28 @@ static void render_entities(void)
                             PHOS_TRAIL_LEN, asteroids[i].trail_head,
                             1.0f, 0.5f, 0.8f);
         vg_draw_shape(&s, asteroids[i].pos, asteroids[i].angle, 1.0f);
+
+        /* Vector Stress-Cracking: draw glowing fracture lines on damaged
+         * metal/crystal asteroids, radiating from the interior outward. */
+        if (asteroids[i].hit_count > 0 && asteroids[i].material > 0) {
+            SDL_Color crack_col = (asteroids[i].material == 2)
+                ? (SDL_Color){60, 220, 180, 160}   /* crystal: teal-ice  */
+                : (SDL_Color){220, 160, 40, 160};  /* metal:   amber     */
+            float r  = asteroids[i].radius * 0.55f;
+            float ag = asteroids[i].angle;
+            /* Four crack segments at roughly 90° intervals, slightly skewed */
+            static const float offsets[4] = { 0.4f, 1.97f, 3.54f, 5.11f };
+            for (int ci = 0; ci < 4; ci++) {
+                float ca   = ag + offsets[ci];
+                float inner = r * 0.18f;
+                float outer = r * 0.58f + r * 0.22f * (float)(ci % 2);
+                Vec2 p1 = { cosf(ca) * inner, sinf(ca) * inner };
+                Vec2 p2 = { cosf(ca) * outer, sinf(ca) * outer };
+                Line cl  = {p1, p2};
+                Shape cs = {&cl, 1, crack_col};
+                vg_draw_shape(&cs, asteroids[i].pos, 0.0f, 1.0f);
+            }
+        }
     }
 
     /* ── Player bullets ─────────────────────────────────────────── */
@@ -5537,6 +5625,52 @@ static void render_overlays(void)
         SDL_Color warn = ui_pulse(HUD_CINNABAR, game_time, 3.0f, 0.5f);
         ui_warning_chevrons(g_renderer, SCREEN_WIDTH / 2.0f - 28.0f,
                             SCREEN_HEIGHT - 30.0f, warn);
+    }
+
+    /* ── Zone Transition Banner ──────────────────────────────────────
+     * Slides in at screen-centre when the player crosses a zone boundary.
+     * 0.4 s fade-in  →  1.7 s hold  →  0.4 s fade-out  (total 2.5 s).
+     * Uses the zone's canonical colour so the banner reads at a glance. */
+    if (zone_banner_timer > 0.0f) {
+        static const char *zone_banner_names[] = {
+            ">>> HOME SPACE <<<",
+            ">>> INNER BELT <<<",
+            ">>> DEEP  VOID <<<",
+            ">>> THE  ABYSS <<<"
+        };
+        float t = zone_banner_timer;
+        float alpha_f;
+        if      (t > 2.1f) alpha_f = (2.5f - t) / 0.4f;   /* fade in  */
+        else if (t < 0.4f) alpha_f = t / 0.4f;             /* fade out */
+        else               alpha_f = 1.0f;                  /* hold     */
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        SDL_Color bc = ui_zone_color(player_zone);
+        bc.a = (Uint8)(alpha_f * 220.0f);
+        float by = SCREEN_HEIGHT * 0.42f;
+        vf_draw_string_centered(zone_banner_names[player_zone],
+                                SCREEN_WIDTH / 2.0f, by, 18, bc);
+        /* thin decorative dividers flanking the text */
+        SDL_Color dc = HUD_BORDER_ACTIVE; dc.a = bc.a / 2;
+        vf_draw_string_centered("---         ---",
+                                SCREEN_WIDTH / 2.0f, by + 26.0f, 10, dc);
+    }
+
+    /* ── Proximity Danger Alert ──────────────────────────────────────
+     * Pulses ">>> DANGER <<<" in Cinnabar at screen-bottom when any
+     * active UFO is within 520 world-units of the player. */
+    if (game_state == STATE_PLAYING && ufo.active && player.active) {
+        float edx  = ufo.pos.x - player.pos.x;
+        float edy  = ufo.pos.y - player.pos.y;
+        float edist = sqrtf(edx * edx + edy * edy);
+        if (edist < 520.0f) {
+            float pulse = (sinf(game_time * 10.0f) + 1.0f) * 0.5f;
+            SDL_Color dc = HUD_CINNABAR;
+            dc.a = (Uint8)(140.0f + 115.0f * pulse);
+            SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+            vf_draw_string_centered(">>> DANGER <<<",
+                                    SCREEN_WIDTH / 2.0f,
+                                    SCREEN_HEIGHT - 54.0f, 14, dc);
+        }
     }
 
     /* Combo pop text */

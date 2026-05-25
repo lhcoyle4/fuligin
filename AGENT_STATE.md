@@ -2,17 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Implementing zone banners, danger alerts, UFO audio sig, stress cracks, chronicle harmonics
-- **Locked Files**:
-  - `src/game.c`
-  - `src/audio.c`
-  - `src/vector_graphics.c`
-  - `include/game.h`
-  - `include/vector_graphics.h`
-  - `todo.md`
-  - `FULIGIN_ACTION_LIST.md`
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -39,3 +32,8 @@
 | Claude | Merge all branches → main (PR #1, all features preserved) | de0c317 | 2026-05-25 |
 | Claude | Mouse button keybinds: LMB=shoot, RMB=thrust, MMB=hyperspace | c9d99e5 | 2026-05-25 |
 | Claude | Add FULIGIN_ACTION_LIST.md (32-item roadmap) | 226e3bb | 2026-05-25 |
+| Claude | Zone Transition Banners: fade-in/out zone name overlay with zone-color tinting | agent/claude | 2026-05-25 |
+| Claude | Proximity Danger Alert: pulsing CINNABAR DANGER text when UFO within 520u | agent/claude | 2026-05-25 |
+| Claude | Cacogen UFO Auditory Signature: FM dual-oscillator wobble+shimmer loop | agent/claude | 2026-05-25 |
+| Claude | Vector Stress-Cracking: wireframe crack lines on hit metal/crystal asteroids | agent/claude | 2026-05-25 |
+| Claude | Chronicle Chord Harmonics: pentatonic FM arpeggio on rapid orb collection | agent/claude | 2026-05-25 |

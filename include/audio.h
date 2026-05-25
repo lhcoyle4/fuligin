@@ -41,6 +41,9 @@ typedef enum {
     SFX_EXPL_METAL_LG, SFX_EXPL_METAL_MD, SFX_EXPL_METAL_SM,
     SFX_EXPL_ICE_LG, SFX_EXPL_ICE_MD, SFX_EXPL_ICE_SM,
 
+    /* --- Chronicle chord harmonics (pentatonic minor, 4th octave) --- */
+    SFX_CHORD_C4, SFX_CHORD_Eb4, SFX_CHORD_F4, SFX_CHORD_G4, SFX_CHORD_Bb4,
+
     SFX_COUNT
 } SoundEffect;
 

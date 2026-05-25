@@ -221,28 +221,64 @@ static int16_t* generate_beat(float freq, int *out_len) {
  */
 static int16_t* generate_ufo_loop(int *out_len) {
     if (!out_len) return NULL;
-    float duration = 0.25f;
+    float duration = 0.5f;   /* longer loop for seamless repeat */
     int len = (int)(SAMPLE_RATE * duration);
     int16_t *buf = (int16_t*)malloc(len * sizeof(int16_t));
-    if (!buf) {
-        *out_len = 0;
-        return NULL;
-    }
+    if (!buf) { *out_len = 0; return NULL; }
 
-    float fc = 600.0f;    /* Carrier frequency in Hz */
-    float fm = 8.0f;      /* Modulator frequency (LFO) in Hz */
-    float index = 150.0f; /* Modulation depth in Hz */
+    /* Dual-LFO FM oscillator — two detuned partials for alien shimmer */
+    float fc       = 340.0f;    /* lower carrier: more ominous than default 600 Hz */
+    float fm_slow  = 1.8f;      /* slow envelope wobble in Hz */
+    float fm_fast  = 9.0f;      /* fast shimmer in Hz */
+    float idx_slow = 180.0f;    /* slow wobble depth in Hz */
+    float idx_fast = 40.0f;     /* fast shimmer depth in Hz */
 
-    double phase = 0.0;
+    double phase1 = 0.0, phase2 = 0.0;
     for (int i = 0; i < len; i++) {
-        float t = (float)i / SAMPLE_RATE;
+        float t      = (float)i / SAMPLE_RATE;
+        float wobble  = idx_slow * sinf(2.0f * (float)M_PI * fm_slow * t);
+        float shimmer = idx_fast * sinf(2.0f * (float)M_PI * fm_fast * t);
+        float freq1   = fc + wobble + shimmer;
+        float freq2   = fc * 1.497f + wobble * 0.6f; /* second partial: ~perfect fifth */
+        phase1 += 2.0 * M_PI * freq1 / SAMPLE_RATE;
+        phase2 += 2.0 * M_PI * freq2 / SAMPLE_RATE;
+        if (phase1 > 2.0 * M_PI) phase1 -= 2.0 * M_PI;
+        if (phase2 > 2.0 * M_PI) phase2 -= 2.0 * M_PI;
+        float s1  = sinf((float)phase1) * 5500.0f;
+        float s2  = sinf((float)phase2) * 2500.0f;
+        float out = s1 + s2;
+        if (out >  32767.0f) out =  32767.0f;
+        if (out < -32768.0f) out = -32768.0f;
+        buf[i] = (int16_t)out;
+    }
+    *out_len = len * sizeof(int16_t);
+    return buf;
+}
 
-        /* FM formula: freq(t) = fc + index * sin(2 * PI * fm * t) */
-        float freq = fc + index * (float)sin(2.0 * M_PI * fm * t);
-        phase += 2.0 * M_PI * freq / SAMPLE_RATE;
-        if (phase > 2.0 * M_PI) phase -= 2.0 * M_PI;
-
-        buf[i] = (int16_t)(sin(phase) * 8000.0f);
+/**
+ * @brief Generates a single FM-synth pentatonic note for chronicle chord harmonics.
+ *        Synthesis: FM carrier with 2x frequency modulator. Fast exponential decay
+ *        gives a bright, plucked-string quality. Duration: ~0.18 s.
+ * @param freq    Fundamental frequency in Hz (e.g. 261.63 for C4).
+ * @param out_len Set to the byte length on success, or 0 on failure.
+ * @return Heap-allocated int16_t buffer, or NULL on allocation failure.
+ */
+static int16_t* generate_chord_note(float freq, int *out_len) {
+    if (!out_len) return NULL;
+    float duration = 0.18f;
+    int len = (int)(SAMPLE_RATE * duration);
+    int16_t *buf = (int16_t*)malloc(len * sizeof(int16_t));
+    if (!buf) { *out_len = 0; return NULL; }
+    float fm  = freq * 2.0f;       /* modulator at 2x carrier for bell-like timbre */
+    float idx = freq * 0.8f;       /* FM depth scales with pitch */
+    double phase = 0.0, pm = 0.0;
+    for (int i = 0; i < len; i++) {
+        float t   = (float)i / SAMPLE_RATE;
+        float env = expf(-t * 8.0f);   /* fast exponential decay */
+        pm   += 2.0 * M_PI * fm   / SAMPLE_RATE;
+        float mod = idx * sinf((float)pm);
+        phase += 2.0 * M_PI * (freq + mod) / SAMPLE_RATE;
+        buf[i] = (int16_t)(sinf((float)phase) * env * 12000.0f);
     }
     *out_len = len * sizeof(int16_t);
     return buf;
@@ -1636,6 +1672,23 @@ int audio_init(void) {
     audio_buffers[SFX_EXPL_ICE_SM] = generate_expl_ice(0, &size);
     mix_chunks[SFX_EXPL_ICE_SM] = Mix_QuickLoad_RAW(
         (Uint8*)audio_buffers[SFX_EXPL_ICE_SM], size);
+
+    /* Chronicle chord harmonics — C minor pentatonic, 4th octave */
+    {
+        static const float chord_freqs[5] = {
+            261.63f,  /* C4  */
+            311.13f,  /* Eb4 */
+            349.23f,  /* F4  */
+            392.00f,  /* G4  */
+            466.16f   /* Bb4 */
+        };
+        for (int ci = 0; ci < 5; ci++) {
+            int sfx = SFX_CHORD_C4 + ci;
+            audio_buffers[sfx] = generate_chord_note(chord_freqs[ci], &size);
+            mix_chunks[sfx]    = Mix_QuickLoad_RAW(
+                (Uint8*)audio_buffers[sfx], size);
+        }
+    }
 
     /* Register the real-time music synthesis callback */
     Mix_SetPostMix(mix_music_callback, NULL);
