@@ -654,7 +654,7 @@ int  settings_dynamic_range   = 1;
 int  settings_mute_unfocused  = 1;
 static int settings_fullscreen       = 0;
 static int settings_glow             = 3;  /* 0=OFF 1=LOW 2=MED 3=HIGH 4=MAX */
-static int settings_tab              = 0;  /* 0=VIDEO 1=AUDIO 2=GAMEPLAY 3=CONTROLS */
+int       settings_tab               = 0;  /* 0=VIDEO 1=AUDIO 2=GAMEPLAY 3=CONTROLS (now 0..8) */
 static int settings_screen_shake     = 1;
 static int settings_show_fps         = 0;
 static int settings_mouse_aim        = 1;
@@ -663,6 +663,13 @@ static int settings_autofire         = 0;
 static int settings_controller_deadzone = 1; /* 0=LOW 1=MED 2=HIGH */
 static int settings_invert_y         = 0;
 static int settings_control_scheme   = 1;  /* 0=ARCADE  1=TWIN_STICK */
+
+/* --- New unified settings (FF7R/CoQ HUD overhaul) --- */
+Settings  g_settings;
+int       settings_row              = 0;
+int       settings_keybind_pending  = -1;
+uint32_t  g_world_seed              = 0;
+/* Note: settings_tab already declared above as static int settings_tab = 0 */
 
 /* --- Key binds --- */
 static SDL_Scancode keybinds[KB_COUNT] = {
@@ -814,6 +821,9 @@ static void start_new_game(void);
 
 /* Settings */
 static void settings_adjust(int dir);
+Settings settings_defaults(void);
+void     settings_save(const Settings *s);
+void     settings_load(Settings *s);
 
 /* game_update sub-helpers (extracted for clarity) */
 static void update_player_physics(float dt);
@@ -1798,6 +1808,121 @@ static void start_new_game()
     game_state = STATE_PLAYING;
 }
 
+/* =========== SETTINGS FUNCTIONS =========== */
+
+Settings settings_defaults(void)
+{
+    Settings s = {0};
+    s.video.fullscreen        = 0;
+    s.video.resolution_idx    = 0;
+    s.video.vsync             = 1;
+    s.video.refresh_rate      = 0;
+    s.graphics.glow_intensity = 2;
+    s.graphics.particle_count = 32;
+    s.graphics.scanlines      = 1;
+    s.graphics.vignette       = 1;
+    s.graphics.screen_shake   = 1;
+    s.audio.master_vol        = 80;
+    s.audio.music_vol         = 70;
+    s.audio.sfx_vol           = 80;
+    s.audio.ui_vol            = 60;
+    s.controls.mouse_aim      = 1;
+    s.controls.mouse_sensitivity = 100;
+    s.controls.autofire       = 0;
+    s.hud.show_fps            = 0;
+    s.hud.show_minimap        = 1;
+    s.hud.crosshair           = CROSSHAIR_CHEVRON;
+    s.hud.hud_scale           = 100;
+    s.hud.show_combo          = 1;
+    s.hud.show_zone_name      = 1;
+    s.accessibility.colorblind      = COLORBLIND_NONE;
+    s.accessibility.font_size_delta = 0;
+    s.gameplay.starting_lives = 3;
+    s.gameplay.difficulty     = DIFF_STANDARD;
+    s.world.seed              = 0;
+    s.world.asteroid_density  = 1.0f;
+    s.world.enemy_density     = 1.0f;
+    s.world.loot_multiplier   = 1.0f;
+    s.show_intro              = 1;
+    return s;
+}
+
+void settings_save(const Settings *s)
+{
+    FILE *f = fopen("fuligin.cfg", "w");
+    if (!f) return;
+    fprintf(f, "glow=%d\n",          s->graphics.glow_intensity);
+    fprintf(f, "particles=%d\n",     s->graphics.particle_count);
+    fprintf(f, "scanlines=%d\n",     s->graphics.scanlines);
+    fprintf(f, "vignette=%d\n",      s->graphics.vignette);
+    fprintf(f, "screen_shake=%d\n",  s->graphics.screen_shake);
+    fprintf(f, "master_vol=%d\n",    s->audio.master_vol);
+    fprintf(f, "music_vol=%d\n",     s->audio.music_vol);
+    fprintf(f, "sfx_vol=%d\n",       s->audio.sfx_vol);
+    fprintf(f, "mouse_aim=%d\n",     s->controls.mouse_aim);
+    fprintf(f, "sensitivity=%d\n",   s->controls.mouse_sensitivity);
+    fprintf(f, "show_fps=%d\n",      s->hud.show_fps);
+    fprintf(f, "show_minimap=%d\n",  s->hud.show_minimap);
+    fprintf(f, "crosshair=%d\n",     (int)s->hud.crosshair);
+    fprintf(f, "hud_scale=%d\n",     s->hud.hud_scale);
+    fprintf(f, "colorblind=%d\n",    (int)s->accessibility.colorblind);
+    fprintf(f, "high_contrast=%d\n", s->accessibility.high_contrast);
+    fprintf(f, "font_delta=%d\n",    s->accessibility.font_size_delta);
+    fprintf(f, "reduce_motion=%d\n", s->accessibility.reduce_motion);
+    fprintf(f, "lives=%d\n",         s->gameplay.starting_lives);
+    fprintf(f, "difficulty=%d\n",    (int)s->gameplay.difficulty);
+    fprintf(f, "world_seed=%u\n",    s->world.seed);
+    fprintf(f, "ast_density=%.2f\n", s->world.asteroid_density);
+    fprintf(f, "enemy_density=%.2f\n", s->world.enemy_density);
+    fprintf(f, "loot_mult=%.2f\n",   s->world.loot_multiplier);
+    fprintf(f, "zone_sharp=%d\n",    s->world.zone_sharpness);
+    fprintf(f, "vsync=%d\n",         s->video.vsync);
+    fprintf(f, "fullscreen=%d\n",    s->video.fullscreen);
+    fprintf(f, "show_intro=%d\n",    s->show_intro);
+    fclose(f);
+}
+
+void settings_load(Settings *s)
+{
+    *s = settings_defaults();
+    FILE *f = fopen("fuligin.cfg", "r");
+    if (!f) return;
+    char key[64], val[64];
+    while (fscanf(f, "%63[^=]=%63s\n", key, val) == 2) {
+        if      (!strcmp(key, "glow"))          s->graphics.glow_intensity = atoi(val);
+        else if (!strcmp(key, "particles"))     s->graphics.particle_count = atoi(val);
+        else if (!strcmp(key, "scanlines"))     s->graphics.scanlines      = atoi(val);
+        else if (!strcmp(key, "vignette"))      s->graphics.vignette       = atoi(val);
+        else if (!strcmp(key, "screen_shake"))  s->graphics.screen_shake   = atoi(val);
+        else if (!strcmp(key, "master_vol"))    s->audio.master_vol        = atoi(val);
+        else if (!strcmp(key, "music_vol"))     s->audio.music_vol         = atoi(val);
+        else if (!strcmp(key, "sfx_vol"))       s->audio.sfx_vol           = atoi(val);
+        else if (!strcmp(key, "mouse_aim"))     s->controls.mouse_aim      = atoi(val);
+        else if (!strcmp(key, "sensitivity"))   s->controls.mouse_sensitivity = atoi(val);
+        else if (!strcmp(key, "show_fps"))      s->hud.show_fps            = atoi(val);
+        else if (!strcmp(key, "show_minimap"))  s->hud.show_minimap        = atoi(val);
+        else if (!strcmp(key, "crosshair"))     s->hud.crosshair           = (CrosshairStyle)atoi(val);
+        else if (!strcmp(key, "hud_scale"))     s->hud.hud_scale           = atoi(val);
+        else if (!strcmp(key, "colorblind"))    s->accessibility.colorblind = (ColorblindMode)atoi(val);
+        else if (!strcmp(key, "high_contrast")) s->accessibility.high_contrast = atoi(val);
+        else if (!strcmp(key, "font_delta"))    s->accessibility.font_size_delta = atoi(val);
+        else if (!strcmp(key, "reduce_motion")) s->accessibility.reduce_motion = atoi(val);
+        else if (!strcmp(key, "lives"))         s->gameplay.starting_lives = atoi(val);
+        else if (!strcmp(key, "difficulty"))    s->gameplay.difficulty     = (Diff)atoi(val);
+        else if (!strcmp(key, "world_seed"))    s->world.seed              = (uint32_t)strtoul(val, NULL, 10);
+        else if (!strcmp(key, "ast_density"))   s->world.asteroid_density  = (float)atof(val);
+        else if (!strcmp(key, "enemy_density")) s->world.enemy_density     = (float)atof(val);
+        else if (!strcmp(key, "loot_mult"))     s->world.loot_multiplier   = (float)atof(val);
+        else if (!strcmp(key, "zone_sharp"))    s->world.zone_sharpness    = atoi(val);
+        else if (!strcmp(key, "vsync"))         s->video.vsync             = atoi(val);
+        else if (!strcmp(key, "fullscreen"))    s->video.fullscreen        = atoi(val);
+        else if (!strcmp(key, "show_intro"))    s->show_intro              = atoi(val);
+    }
+    fclose(f);
+}
+
+/* =========== GAME INIT =========== */
+
 /** @brief One-time initialization called after SDL is ready.
  *  Loads persistent data (high scores), builds the ship's line geometry,
  *  and detects connected game controllers. */
@@ -1834,62 +1959,169 @@ void game_init()
         }
     }
     settings_mouse_aim = has_controller ? 0 : 1;
+
+    /* Load unified settings and propagate to legacy globals for backwards compat */
+    settings_load(&g_settings);
+    settings_glow         = g_settings.graphics.glow_intensity;
+    settings_show_fps     = g_settings.hud.show_fps;
+    if (g_settings.controls.mouse_aim || !has_controller)
+        settings_mouse_aim = g_settings.controls.mouse_aim;
+    settings_screen_shake = g_settings.graphics.screen_shake;
+    settings_fullscreen   = g_settings.video.fullscreen;
+    if (g_settings.gameplay.starting_lives > 0)
+        lives = g_settings.gameplay.starting_lives;
+    g_world_seed = g_settings.world.seed;
 }
 
 /** @brief Mutates a settings value based on the current selection and direction (+1/-1). */
 static void settings_adjust(int dir)
 {
+    int r = settings_row;
+    #define TOGGLE(x)   ((x) = !(x))
+    #define CLAMP_ADJ(x, lo, hi) \
+        do { if (dir < 0) { if ((x) > (lo)) (x)--; } \
+             else          { if ((x) < (hi)) (x)++; } } while (0)
+
     if (settings_tab == 0) { /* VIDEO */
-        if (menu_selection == 0) {
-            settings_fullscreen = !settings_fullscreen;
+        if      (r == 0) {
+            TOGGLE(g_settings.video.fullscreen);
+            settings_fullscreen = g_settings.video.fullscreen;
             SDL_SetWindowFullscreen(g_window,
-                settings_fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
-        } else if (menu_selection == 1) {
-            if (dir < 0) { if (settings_glow > 0) settings_glow--; }
-            else         { if (settings_glow < 4) settings_glow++; }
-        } else if (menu_selection == 2) {
-            settings_show_fps = !settings_show_fps;
-        } else if (menu_selection == 3) {
-            settings_screen_shake = !settings_screen_shake;
+                g_settings.video.fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+        } else if (r == 1) {
+            CLAMP_ADJ(g_settings.video.refresh_rate, 30, 240);
+        } else if (r == 2) {
+            TOGGLE(g_settings.video.vsync);
         }
-    } else if (settings_tab == 1) { /* AUDIO */
-        if (menu_selection == 0) {
-            if (dir < 0) { if (settings_volume > 0)   audio_set_volume(settings_volume - 5); }
-            else         { if (settings_volume < 100)  audio_set_volume(settings_volume + 5); }
-        } else if (menu_selection == 1) {
-            if (dir < 0) { settings_sfx_vol = (settings_sfx_vol <= 5) ? 0 : settings_sfx_vol - 5; }
-            else         { if (settings_sfx_vol < 100) settings_sfx_vol += 5; }
-        } else if (menu_selection == 2) {
-            if (dir < 0) { settings_music_vol = (settings_music_vol <= 5) ? 0 : settings_music_vol - 5; }
-            else         { if (settings_music_vol < 400) settings_music_vol += 5; }
-        } else if (menu_selection == 3) {
-            settings_dynamic_range = !settings_dynamic_range;
-        } else if (menu_selection == 4) {
-            settings_mute_unfocused = !settings_mute_unfocused;
+
+    } else if (settings_tab == 1) { /* GRAPHICS */
+        if      (r == 0) {
+            CLAMP_ADJ(g_settings.graphics.glow_intensity, 0, 4);
+            settings_glow = g_settings.graphics.glow_intensity;
+        } else if (r == 1) {
+            CLAMP_ADJ(g_settings.graphics.particle_count, 0, 64);
+        } else if (r == 2) {
+            TOGGLE(g_settings.graphics.scanlines);
+        } else if (r == 3) {
+            TOGGLE(g_settings.graphics.vignette);
+        } else if (r == 4) {
+            TOGGLE(g_settings.graphics.motion_blur);
+        } else if (r == 5) {
+            TOGGLE(g_settings.graphics.screen_shake);
+            settings_screen_shake = g_settings.graphics.screen_shake;
         }
-    } else if (settings_tab == 2) { /* GAMEPLAY */
-        if (menu_selection == 0) {
-            if (dir < 0) { if (difficulty > 0) difficulty--; }
-            else         { if (difficulty < 3) difficulty++; }
-        } else if (menu_selection == 1) {
-            settings_autofire = !settings_autofire;
-        } else if (menu_selection == 2) {
-            settings_invert_y = !settings_invert_y;
+
+    } else if (settings_tab == 2) { /* AUDIO */
+        if      (r == 0) {
+            CLAMP_ADJ(g_settings.audio.master_vol, 0, 100);
+            audio_set_volume(g_settings.audio.master_vol);
+            settings_volume = g_settings.audio.master_vol;
+        } else if (r == 1) {
+            CLAMP_ADJ(g_settings.audio.music_vol, 0, 100);
+            settings_music_vol = g_settings.audio.music_vol;
+        } else if (r == 2) {
+            CLAMP_ADJ(g_settings.audio.sfx_vol, 0, 100);
+            settings_sfx_vol = g_settings.audio.sfx_vol;
+        } else if (r == 3) {
+            CLAMP_ADJ(g_settings.audio.ui_vol, 0, 100);
+        } else if (r == 4) {
+            TOGGLE(g_settings.audio.streamer_mode);
+            settings_mute_unfocused = g_settings.audio.streamer_mode;
         }
+
     } else if (settings_tab == 3) { /* CONTROLS */
-        if (menu_selection == 0) {
-            settings_mouse_aim = !settings_mouse_aim;
-        } else if (menu_selection == 1) {
-            if (dir < 0) { if (settings_crosshair_style > 0) settings_crosshair_style--; }
-            else         { if (settings_crosshair_style < 2) settings_crosshair_style++; }
-        } else if (menu_selection == 2) {
-            if (dir < 0) { if (settings_controller_deadzone > 0) settings_controller_deadzone--; }
-            else         { if (settings_controller_deadzone < 2) settings_controller_deadzone++; }
-        } else if (menu_selection == 3) {
-            if (dir < 0) { if (settings_control_scheme > 0) settings_control_scheme--; }
-            else         { if (settings_control_scheme < 1) settings_control_scheme++; }
+        if      (r == 0) {
+            TOGGLE(g_settings.controls.mouse_aim);
+            settings_mouse_aim = g_settings.controls.mouse_aim;
+        } else if (r == 1) {
+            CLAMP_ADJ(g_settings.controls.mouse_sensitivity, 1, 10);
+        } else if (r == 2) {
+            TOGGLE(g_settings.controls.autofire);
+            settings_autofire = g_settings.controls.autofire;
+        } else if (r == 3) {
+            TOGGLE(g_settings.controls.aim_assist);
+        } else if (r == 4) {
+            CLAMP_ADJ(g_settings.controls.ctrl_deadzone, 0, 2);
+            settings_controller_deadzone = g_settings.controls.ctrl_deadzone;
+        } else if (r == 5) {
+            TOGGLE(g_settings.controls.invert_y);
+            settings_invert_y = g_settings.controls.invert_y;
         }
+        /* r == 6: KEYBINDS — handled in caller */
+
+    } else if (settings_tab == 4) { /* HUD */
+        if      (r == 0) {
+            TOGGLE(g_settings.hud.show_fps);
+            settings_show_fps = g_settings.hud.show_fps;
+        } else if (r == 1) {
+            TOGGLE(g_settings.hud.show_minimap);
+        } else if (r == 2) {
+            CLAMP_ADJ(g_settings.hud.crosshair, 0, CROSSHAIR_COUNT - 1);
+            settings_crosshair_style = (int)g_settings.hud.crosshair;
+        } else if (r == 3) {
+            CLAMP_ADJ(g_settings.hud.hud_scale, 50, 200);
+        } else if (r == 4) {
+            TOGGLE(g_settings.hud.show_combo);
+        } else if (r == 5) {
+            TOGGLE(g_settings.hud.show_zone_name);
+        }
+
+    } else if (settings_tab == 5) { /* ACCESSIBILITY */
+        if      (r == 0) {
+            CLAMP_ADJ(g_settings.accessibility.colorblind, 0,
+                      COLORBLIND_COUNT - 1);
+        } else if (r == 1) {
+            TOGGLE(g_settings.accessibility.high_contrast);
+        } else if (r == 2) {
+            CLAMP_ADJ(g_settings.accessibility.font_size_delta, -4, 4);
+        } else if (r == 3) {
+            TOGGLE(g_settings.accessibility.reduce_motion);
+        }
+
+    } else if (settings_tab == 6) { /* GAMEPLAY */
+        if      (r == 0) {
+            CLAMP_ADJ(g_settings.gameplay.difficulty, 0, DIFF_COUNT - 1);
+            /* Mirror to legacy difficulty variable */
+            difficulty = (int)g_settings.gameplay.difficulty;
+        } else if (r == 1) {
+            CLAMP_ADJ(g_settings.gameplay.starting_lives, 1, 9);
+        }
+
+    } else if (settings_tab == 7) { /* WORLD */
+        if      (r == 0) {
+            g_settings.world.seed += (uint32_t)(dir * 1);
+            g_world_seed = g_settings.world.seed;
+        } else if (r == 1) {
+            float v = g_settings.world.asteroid_density + dir * 0.1f;
+            if (v < 0.1f) v = 0.1f;
+            if (v > 3.0f) v = 3.0f;
+            g_settings.world.asteroid_density = v;
+        } else if (r == 2) {
+            float v = g_settings.world.enemy_density + dir * 0.1f;
+            if (v < 0.0f) v = 0.0f;
+            if (v > 3.0f) v = 3.0f;
+            g_settings.world.enemy_density = v;
+        } else if (r == 3) {
+            float v = g_settings.world.loot_multiplier + dir * 0.1f;
+            if (v < 0.1f) v = 0.1f;
+            if (v > 5.0f) v = 5.0f;
+            g_settings.world.loot_multiplier = v;
+        } else if (r == 4) {
+            CLAMP_ADJ(g_settings.world.zone_sharpness, 0, 10);
+        } else if (r == 5) {
+            CLAMP_ADJ(g_settings.world.starting_zone, 0, 3);
+        }
+
+    } else if (settings_tab == 8) { /* SYSTEM */
+        if (r == 0) {
+            TOGGLE(g_settings.show_intro);
+        }
+        /* r == 1: RESET DEFAULTS — handled in caller */
+        /* r == 2: SAVE & QUIT — handled in caller */
     }
+
+    #undef TOGGLE
+    #undef CLAMP_ADJ
 }
 
 /** @brief Pauses or resumes the simulation.
@@ -2014,33 +2246,55 @@ static void handle_input_menus(SDL_Event *event)
                 audio_stop(SFX_UFO_LOOP);
             }
         } else if (game_state == STATE_SETTINGS) {
-            int max_sel = 0;
-            if (settings_tab == 0)      max_sel = 3;
-            else if (settings_tab == 1) max_sel = 4;
-            else if (settings_tab == 2) max_sel = 2;
-            else if (settings_tab == 3) max_sel = 4;
+            /* Max row index per tab (0-based, inclusive) */
+            const int tab_maxrow[] = {2, 5, 4, 6, 5, 3, 1, 5, 2};
+            const int tab_count_s  = 9;
+            int max_sel = tab_maxrow[settings_tab];
 
             SDL_Keycode sym = event->key.keysym.sym;
-            if (sym == SDLK_q) { settings_tab = (settings_tab + 3) % 4; menu_selection = 0; }
-            if (sym == SDLK_e) { settings_tab = (settings_tab + 1) % 4; menu_selection = 0; }
-            if (sym == SDLK_UP   || sym == SDLK_w)
-                menu_selection = (menu_selection == 0) ? 0 : menu_selection - 1;
-            if (sym == SDLK_DOWN || sym == SDLK_s)
-                if (menu_selection < max_sel) menu_selection++;
+            if (sym == SDLK_q) {
+                settings_tab = (settings_tab + tab_count_s - 1) % tab_count_s;
+                settings_row = 0; menu_selection = 0;
+            }
+            if (sym == SDLK_e) {
+                settings_tab = (settings_tab + 1) % tab_count_s;
+                settings_row = 0; menu_selection = 0;
+            }
+            if (sym == SDLK_UP   || sym == SDLK_w) {
+                settings_row = (settings_row == 0) ? 0 : settings_row - 1;
+                menu_selection = settings_row;
+            }
+            if (sym == SDLK_DOWN || sym == SDLK_s) {
+                if (settings_row < max_sel) settings_row++;
+                menu_selection = settings_row;
+            }
             if (sym == SDLK_LEFT  || sym == SDLK_a) settings_adjust(-1);
             if (sym == SDLK_RIGHT || sym == SDLK_d) settings_adjust(1);
             if (sym == SDLK_RETURN || sym == SDLK_SPACE) {
-                if (settings_tab == 3 && menu_selection == 4) {
-                    game_state          = STATE_KEYBINDS;
-                    keybind_selection   = 0;
-                    keybind_page        = 0;
-                    rebinding_action    = -1;
+                /* CONTROLS tab, KEYBINDS row */
+                if (settings_tab == 3 && settings_row == 6) {
+                    game_state            = STATE_KEYBINDS;
+                    keybind_selection     = 0;
+                    keybind_page          = 0;
+                    rebinding_action      = -1;
                     ctrl_rebinding_action = -1;
+                /* SYSTEM tab — RESET DEFAULTS row */
+                } else if (settings_tab == 8 && settings_row == 1) {
+                    g_settings = settings_defaults();
+                /* SYSTEM tab — SAVE & QUIT row */
+                } else if (settings_tab == 8 && settings_row == 2) {
+                    settings_save(&g_settings);
+                    game_state = settings_back_state;
+                    settings_row = 0; menu_selection = 0;
                 } else {
                     settings_adjust(1);
                 }
             }
-            if (sym == SDLK_ESCAPE) { game_state = settings_back_state; menu_selection = 0; }
+            if (sym == SDLK_ESCAPE) {
+                settings_save(&g_settings);
+                game_state = settings_back_state;
+                settings_row = 0; menu_selection = 0;
+            }
         } else if (game_state == STATE_KEYBINDS) {
             if (rebinding_action >= 0) {
                 SDL_Scancode sc = event->key.keysym.scancode;
@@ -2147,36 +2401,49 @@ static void handle_input_menus(SDL_Event *event)
                 settings_tab        = 0;
             }
         } else if (game_state == STATE_SETTINGS) {
-            int max_sel = 0;
-            if (settings_tab == 0)      max_sel = 3;
-            else if (settings_tab == 1) max_sel = 4;
-            else if (settings_tab == 2) max_sel = 2;
-            else if (settings_tab == 3) max_sel = 4;
+            const int tab_maxrow_c[] = {2, 5, 4, 6, 5, 3, 1, 5, 2};
+            const int tab_count_c    = 9;
+            int max_sel = tab_maxrow_c[settings_tab];
 
-            if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP)
-                menu_selection = (menu_selection == 0) ? 0 : menu_selection - 1;
-            if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN)
-                { if (menu_selection < max_sel) menu_selection++; }
+            if (btn == SDL_CONTROLLER_BUTTON_DPAD_UP) {
+                settings_row = (settings_row == 0) ? 0 : settings_row - 1;
+                menu_selection = settings_row;
+            }
+            if (btn == SDL_CONTROLLER_BUTTON_DPAD_DOWN) {
+                if (settings_row < max_sel) settings_row++;
+                menu_selection = settings_row;
+            }
             if (btn == SDL_CONTROLLER_BUTTON_DPAD_LEFT)  settings_adjust(-1);
             if (btn == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) settings_adjust(1);
             if (btn == SDL_CONTROLLER_BUTTON_A) {
-                if (settings_tab == 3 && menu_selection == 4) {
-                    game_state          = STATE_KEYBINDS;
-                    keybind_selection   = 0;
-                    keybind_page        = 0;
-                    rebinding_action    = -1;
+                if (settings_tab == 3 && settings_row == 6) {
+                    game_state            = STATE_KEYBINDS;
+                    keybind_selection     = 0;
+                    keybind_page          = 0;
+                    rebinding_action      = -1;
                     ctrl_rebinding_action = -1;
+                } else if (settings_tab == 8 && settings_row == 1) {
+                    g_settings = settings_defaults();
+                } else if (settings_tab == 8 && settings_row == 2) {
+                    settings_save(&g_settings);
+                    game_state = settings_back_state;
+                    settings_row = 0; menu_selection = 0;
                 } else {
                     settings_adjust(1);
                 }
             }
-            if (btn == SDL_CONTROLLER_BUTTON_LEFTSHOULDER)
-                settings_tab = (settings_tab + 3) % 4;
-            if (btn == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER)
-                settings_tab = (settings_tab + 1) % 4;
+            if (btn == SDL_CONTROLLER_BUTTON_LEFTSHOULDER) {
+                settings_tab = (settings_tab + tab_count_c - 1) % tab_count_c;
+                settings_row = 0; menu_selection = 0;
+            }
+            if (btn == SDL_CONTROLLER_BUTTON_RIGHTSHOULDER) {
+                settings_tab = (settings_tab + 1) % tab_count_c;
+                settings_row = 0; menu_selection = 0;
+            }
             if (btn == SDL_CONTROLLER_BUTTON_B || btn == SDL_CONTROLLER_BUTTON_START) {
+                settings_save(&g_settings);
                 game_state     = settings_back_state;
-                menu_selection = 0;
+                settings_row   = 0; menu_selection = 0;
             }
         } else if (game_state == STATE_KEYBINDS) {
             if (ctrl_rebinding_action >= 0) {
@@ -4799,188 +5066,166 @@ static void render_entities(void)
  */
 static void render_hud(void)
 {
-    SDL_Color main_color = {220, 240, 255, 255};
     char hud_text[64];
 
-    /* ── Ambient particle drift — drawn before all panels ─────────── */
-    ui_particle_drift(g_renderer, game_time, 24);
+    /* Resolve zone color for border accents */
+    SDL_Color zone_color = ui_zone_color(player_zone);
+
+    /* ── Atmosphere passes — drawn before all panels ── */
+    if (g_settings.graphics.vignette)
+        ui_vignette(g_renderer);
+    if (g_settings.graphics.particle_count > 0)
+        ui_particle_drift(g_renderer, game_time, g_settings.graphics.particle_count);
+
+    /* PLACEHOLDER: old panel rendering follows — will be replaced by angled panels */
+    ui_particle_drift(g_renderer, game_time, 0); /* no-op, kept for branch parity */
 
     /* ================================================================
-     * TOP-LEFT PANEL — CHRONICLE (score, level, wave, combo)
-     * x=8, y=8, w=230, h=128
+     * TOP-LEFT PANEL — [SCORE] / ZONE / COMBO  (FF7R angled cut)
      * ================================================================ */
     {
-        float px = 8.0f, py = 8.0f, pw = 230.0f, ph = 128.0f;
-        SDL_Color zone_border = ui_zone_color(player_zone);
+        float px = HUD_TL_X, py = HUD_TL_Y, pw = HUD_TL_W, ph = HUD_TL_H;
+        float pad = HUD_PAD_INNER;
 
-        ui_panel(g_renderer, px, py, pw, ph, zone_border);
-        ui_scanlines(g_renderer, px, py, pw, ph);
+        ui_panel_angled(g_renderer, px, py, pw, ph, HUD_TL_CUT, zone_color);
 
-        /* Header */
-        SDL_Color hdr_cyan = {0, 200, 200, 160};
-        ui_panel_header(g_renderer, px, py, pw, "CHRONICLE", hdr_cyan);
-
-        /* Large score — "%06d", size 26 */
-        sprintf(hud_text, "%06d", score);
-        vf_draw_string(hud_text, px + 10.0f, py + 26.0f, 26, UI_WHITE);
-
-        /* LVL + WAVE row, size 10, UI_GREY */
-        sprintf(hud_text, "LVL %d", player_level);
-        vf_draw_string(hud_text, px + 10.0f, py + 62.0f, 10, UI_GREY);
-        sprintf(hud_text, "WAVE %d", level);
-        vf_draw_string(hud_text, px + 110.0f, py + 62.0f, 10, UI_GREY);
-
-        /* Combo row */
-        if (combo_count >= 2) {
-            SDL_Color combo_base = (combo_count >= 4) ? UI_GOLD : UI_AMBER;
-            SDL_Color combo_col  = ui_pulse(combo_base, game_time, 2.5f, 0.35f);
-            sprintf(hud_text, "x%d COMBO!", combo_count);
-            vf_draw_string(hud_text, px + 10.0f, py + 80.0f, 13, combo_col);
+        /* Row 1: [SCORE] label + score value */
+        float row1_y = py + pad;
+        vf_draw_string("[SCORE]", px + pad + HUD_TL_CUT, row1_y, 9, HUD_TEXT_DIM);
+        sprintf(hud_text, "%08d", score);
+        {
+            float tw = (float)strlen(hud_text) * 9.0f * 1.1f;
+            vf_draw_string(hud_text, px + pw - pad - tw, row1_y, 16, HUD_TEXT_GOLD);
         }
 
-        /* Dim top-score comparison label — centred inside panel */
-        if (high_scores[0].score > score) {
-            SDL_Color dim_col = {120, 140, 160, 100};
-            sprintf(hud_text, "BEST %06d", high_scores[0].score);
-            vf_draw_string_centered(hud_text, px + pw / 2.0f,
-                                    py + 106.0f, 9, dim_col);
+        /* Separator */
+        float sep_y = row1_y + HUD_ROW_H + 4.0f;
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(g_renderer,
+            HUD_BORDER_MID.r, HUD_BORDER_MID.g, HUD_BORDER_MID.b, 80);
+        SDL_RenderDrawLineF(g_renderer, px + pad, sep_y, px + pw - pad, sep_y);
+
+        /* Row 2: ZONE: name | LVL: N */
+        static const char *tl_zone_names[] = {
+            "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
+        };
+        float row2_y = sep_y + 5.0f;
+        vf_draw_string("ZONE:", px + pad + HUD_TL_CUT, row2_y, 9, HUD_TEXT_DIM);
+        vf_draw_string(tl_zone_names[player_zone],
+                       px + pad + HUD_TL_CUT + 42.0f, row2_y, 9, zone_color);
+        sprintf(hud_text, "LVL:%d", player_level);
+        vf_draw_string(hud_text, px + pw - pad - 42.0f, row2_y, 9, HUD_TEXT_DIM);
+
+        /* Row 3: COMBO */
+        float row3_y = row2_y + HUD_ROW_H + 2.0f;
+        if (combo_count > 1) {
+            SDL_Color combo_col = ui_pulse(HUD_AMBER, game_time, 2.5f, 0.35f);
+            sprintf(hud_text, "COMBO x%d", combo_count);
+            vf_draw_string(hud_text, px + pad + HUD_TL_CUT, row3_y, 12, combo_col);
+        } else {
+            vf_draw_string("COMBO x1", px + pad + HUD_TL_CUT, row3_y, 9, HUD_TEXT_DIM);
         }
     }
 
     /* ================================================================
-     * BOTTOM-LEFT PANEL — AUTODYNE STATUS (lives, chronicle/XP bar)
-     * x=8, y=SCREEN_HEIGHT-122, w=230, h=114
+     * BOTTOM-LEFT PANEL — [HULL] / [CHRON] / [LIVES]  (FF7R angled)
      * ================================================================ */
     {
-        float px = 8.0f;
-        float py = (float)(SCREEN_HEIGHT - 122);
-        float pw = 230.0f, ph = 114.0f;
-        SDL_Color zone_border = ui_zone_color(player_zone);
+        float px = HUD_BL_X, py = HUD_BL_Y, pw = HUD_BL_W, ph = HUD_BL_H;
+        float pad = HUD_PAD_INNER;
 
-        ui_panel(g_renderer, px, py, pw, ph, zone_border);
-        ui_scanlines(g_renderer, px, py, pw, ph);
+        ui_panel_angled(g_renderer, px, py, pw, ph, HUD_BL_CUT, zone_color);
 
-        SDL_Color hdr_cyan = {0, 200, 200, 160};
-        ui_panel_header(g_renderer, px, py, pw, "AUTODYNE STATUS", hdr_cyan);
+        float bar_x = px + pad + HUD_BL_CUT + 48.0f;
+        float bar_w = pw - (bar_x - px) - pad;
 
-        /* Lives icons — ship glyphs at scale 0.6, starting at y+28 */
+        /* Row 1: [HULL] — placeholder solid bar (no HP struct yet) */
+        float row1_y = py + pad;
+        vf_draw_string("[HULL]", px + pad + HUD_BL_CUT, row1_y, 9, HUD_TEXT_DIM);
+        ui_bar(g_renderer, bar_x, row1_y, bar_w, 8.0f, 1.0f, 1.0f, HUD_TEAL);
+
+        /* Row 2: [CHRON] segmented XP bar */
+        float row2_y = row1_y + HUD_ROW_H + 4.0f;
+        vf_draw_string("[CHRON]", px + pad + HUD_BL_CUT, row2_y, 9, HUD_TEXT_DIM);
+        SDL_Color xp_fill = HUD_GOLD_BAR;
+        if (xp_flash_timer > 0.0f && ((int)(xp_flash_timer * 20) % 2 == 0))
+            xp_fill = HUD_TEXT_PRIMARY;
+        ui_bar_segmented(g_renderer, bar_x, row2_y, bar_w, 8.0f,
+                         (float)player_xp, (float)xp_threshold, 2, xp_fill);
+        sprintf(hud_text, "%dXP", player_xp);
         {
-            SDL_Color ship_col = UI_WHITE;
+            float tw = (float)strlen(hud_text) * 7.0f * 1.1f;
+            vf_draw_string(hud_text, px + pw - pad - tw, row2_y, 7, HUD_TEXT_DIM);
+        }
+
+        /* Row 3: [LIVES] — ship glyphs */
+        float row3_y = row2_y + HUD_ROW_H + 4.0f;
+        vf_draw_string("[LIVES]", px + pad + HUD_BL_CUT, row3_y, 9, HUD_TEXT_DIM);
+        {
+            SDL_Color ship_col = HUD_TEXT_CYAN;
             Shape s = {ship_lines, sizeof(ship_lines) / sizeof(Line), ship_col};
             int icon_count = lives - 1;
             if (icon_count < 0) icon_count = 0;
+            if (icon_count > 6) icon_count = 6;
             for (int i = 0; i < icon_count; i++) {
-                Vec2 pos = {px + 18.0f + i * 22.0f, py + 42.0f};
-                vg_draw_shape(&s, pos, 0.0f, 0.6f);
+                Vec2 pos = {bar_x + i * 14.0f, row3_y + 4.0f};
+                vg_draw_shape(&s, pos, 0.0f, 0.45f);
             }
-        }
-
-        /* Chronicle (XP) bar */
-        {
-            float bar_x = px + 8.0f;
-            float bar_w = pw - 16.0f;
-            float bar_y = py + 68.0f;
-
-            /* Labels above bar */
-            SDL_Color xp_label_col = {57, 200, 20, 180};
-            vf_draw_string("CHRONICLE", bar_x, bar_y - 14.0f, 8,
-                           xp_label_col);
-            sprintf(hud_text, "%d / %d", player_xp, xp_threshold);
-            {
-                float tw = (float)strlen(hud_text) * 8.0f * 1.2f;
-                vf_draw_string(hud_text, bar_x + bar_w - tw,
-                               bar_y - 14.0f, 8, xp_label_col);
-            }
-
-            /* Bar fill — flash to UI_WHITE on xp_flash_timer */
-            SDL_Color xp_fill = UI_GREEN;
-            if (xp_flash_timer > 0.0f &&
-                ((int)(xp_flash_timer * 20) % 2 == 0)) {
-                xp_fill = UI_WHITE;
-            }
-            ui_bar(g_renderer, bar_x, bar_y, bar_w, 10.0f,
-                   (float)player_xp, (float)xp_threshold, xp_fill);
         }
     }
 
     /* ================================================================
-     * BOTTOM-RIGHT PANEL — SYSTEMS (fuel, resources)
-     * x=SCREEN_WIDTH-238, y=SCREEN_HEIGHT-122, w=230, h=114
+     * BOTTOM-RIGHT PANEL — [FUEL] / [ZONE] / [AMMO]  (FF7R angled)
      * ================================================================ */
     {
-        float px = (float)(SCREEN_WIDTH - 238);
-        float py = (float)(SCREEN_HEIGHT - 122);
-        float pw = 230.0f, ph = 114.0f;
-        SDL_Color zone_border = ui_zone_color(player_zone);
+        float px = HUD_BR_X, py = HUD_BR_Y, pw = HUD_BR_W, ph = HUD_BR_H;
+        float pad = HUD_PAD_INNER;
 
-        ui_panel(g_renderer, px, py, pw, ph, zone_border);
-        ui_scanlines(g_renderer, px, py, pw, ph);
+        ui_panel_angled(g_renderer, px, py, pw, ph, HUD_BR_CUT, zone_color);
 
-        SDL_Color hdr_cyan = {0, 200, 200, 160};
-        ui_panel_header(g_renderer, px, py, pw, "SYSTEMS", hdr_cyan);
+        float bar_x = px + pad + HUD_BR_CUT + 48.0f;
+        float bar_w = pw - (bar_x - px) - pad;
 
-        /* Fuel bar */
+        /* Row 1: [FUEL] bar + percent */
+        float row1_y = py + pad;
+        float fpct = (fuel_max > 0.0f) ? (fuel_current / fuel_max) : 0.0f;
+        SDL_Color fc = ui_fuel_color(fpct);
+        vf_draw_string("[FUEL]", px + pad + HUD_BR_CUT, row1_y, 9, HUD_TEXT_DIM);
+        ui_bar(g_renderer, bar_x, row1_y, bar_w, 8.0f, fuel_current, fuel_max, fc);
+        sprintf(hud_text, "%d%%", (int)(fpct * 100.0f));
         {
-            float fpct   = (fuel_max > 0.0f)
-                           ? (fuel_current / fuel_max) : 0.0f;
-            SDL_Color fc = ui_fuel_color(fpct);
-            float bar_x  = px + 8.0f;
-            float bar_w  = pw - 16.0f;
-            float bar_y  = py + 36.0f;
-
-            vf_draw_string("FUEL", bar_x, bar_y - 14.0f, 9, fc);
-            sprintf(hud_text, "%d%%", (int)(fpct * 100.0f));
-            {
-                float tw = (float)strlen(hud_text) * 9.0f * 1.2f;
-                vf_draw_string(hud_text, bar_x + bar_w - tw,
-                               bar_y - 14.0f, 9, fc);
-            }
-            ui_bar(g_renderer, bar_x, bar_y, bar_w, 10.0f,
-                   fuel_current, fuel_max, fc);
+            float tw = (float)strlen(hud_text) * 7.0f * 1.1f;
+            vf_draw_string(hud_text, px + pw - pad - tw, row1_y, 7, fc);
         }
 
-        /* Resource grid — two rows, size 9 */
-        {
-            char rbuf[96];
-            float row_y1 = py + 62.0f;
-            float row_y2 = py + 76.0f;
-            float rx     = px + 8.0f;
-            SDL_Color res_col = {140, 160, 180, 200};
+        /* Row 2: [ZONE] — zone name in zone accent color */
+        static const char *br_zone_names[] = {
+            "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
+        };
+        float row2_y = row1_y + HUD_ROW_H + 4.0f;
+        vf_draw_string("[ZONE]", px + pad + HUD_BR_CUT, row2_y, 9, HUD_TEXT_DIM);
+        vf_draw_string(br_zone_names[player_zone], bar_x, row2_y, 9, zone_color);
 
-            sprintf(rbuf, "VS:%d  AF:%d  HX:%d  AM:%d  RK:%d",
-                    res_void_steel, res_autodyne_frags, res_hex_modules,
-                    res_ammo, res_rockets);
-            vf_draw_string(rbuf, rx, row_y1, 9, res_col);
+        /* Row 3: [AMMO] block bar */
+        float row3_y = row2_y + HUD_ROW_H + 4.0f;
+        vf_draw_string("[AMMO]", px + pad + HUD_BR_CUT, row3_y, 9, HUD_TEXT_DIM);
+        ui_bar_block(g_renderer, bar_x, row3_y,
+                     (float)res_ammo, 12.0f, 12, HUD_AMBER);
 
-            /* Row 2 — highlight in UI_CINNABAR if contraband aboard */
-            SDL_Color row2_col = (res_contraband > 0) ? UI_CINNABAR : res_col;
-            sprintf(rbuf, "CB:%d  IS:%d  CL:%d  MD:%d",
-                    res_contraband, res_isotopes, res_coolant, res_medicinals);
-            vf_draw_string(rbuf, rx, row_y2, 9, row2_col);
-        }
-
-        /* God-mode banner centred inside this panel */
-        if (god_mode_msg_timer > 0.0f) {
-            SDL_Color gm_col = god_mode
-                               ? UI_CINNABAR
-                               : (SDL_Color){100, 100, 255, 255};
-            const char *gm_str = god_mode
-                                 ? "GOD MODE: ENABLED"
-                                 : "GOD MODE: DISABLED";
-            vf_draw_string_centered(gm_str,
-                                    px + pw / 2.0f, py + ph / 2.0f + 10.0f,
-                                    11, gm_col);
+        /* Contraband warning */
+        if (res_contraband > 0) {
+            SDL_Color cb_warn = ui_pulse(HUD_CINNABAR, game_time, 2.0f, 0.4f);
+            vf_draw_string("CONTRABAND", px + pad + HUD_BR_CUT, row3_y, 7, cb_warn);
         }
     }
 
     /* ================================================================
-     * RELIC STRIP — active upgrade badges, right edge vertical strip
-     * x=SCREEN_WIDTH-45, stepping down from y=140
+     * RELIC STRIP — upgrade badges along right edge (preserved)
      * ================================================================ */
     if (game_state == STATE_PLAYING || game_state == STATE_ATTRACT_GAMEPLAY) {
         float ix = (float)(SCREEN_WIDTH - 45);
         float iy = HUD_UPGRADE_Y0;
-        SDL_Color ic = {0, 220, 220, 180};   /* UI_CYAN at 180 alpha */
+        SDL_Color ic = HUD_TEXT_CYAN;
 
         if (player_upgrades.triple_shot)
             { vf_draw_string("3X",  ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
@@ -5005,17 +5250,19 @@ static void render_hud(void)
         if (player_upgrades.mirror_image)
             { vf_draw_string("TWN", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.phase_shift)
-            { vf_draw_string("PHS", ix, iy, 9,
-                             (SDL_Color){255, 200, 100, 180}); iy += HUD_UPGRADE_STEP; }
+            { vf_draw_string("PHS", ix, iy, 9, HUD_AMBER); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.singularity_whip)
             { vf_draw_string("BWP", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
         if (player_upgrades.nova_explosion)
             { vf_draw_string("NOV", ix, iy, 9, ic); iy += HUD_UPGRADE_STEP; }
-        (void)iy; /* suppress unused-after-last-write warning */
+        (void)iy;
     }
 
-    /* suppress unused variable warning for main_color (kept per instructions) */
-    (void)main_color;
+    /* FPS counter */
+    if (settings_show_fps) {
+        sprintf(hud_text, "%d FPS", fps_display_val);
+        vf_draw_string(hud_text, 8, 8, 12, HUD_GREEN);
+    }
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -5031,37 +5278,55 @@ static void render_minimap(void)
 {
     if (!minimap_visible) return;
 
-    /* Panel geometry — wraps the map content with an 8px inset on each side */
-    float panel_x = (float)SCREEN_WIDTH - 205.0f;
-    float panel_y = 8.0f;
-    float panel_w = 197.0f;
-    float panel_h = 186.0f;
+    /* Panel frame — rectangular (minimap uses CoQ rectangle style) */
+    float panel_x = (float)HUD_TR_X;
+    float panel_y = (float)HUD_TR_Y;
+    float panel_w = (float)HUD_TR_W;
+    float panel_h = (float)HUD_TR_H;
+    SDL_Color mm_zone_col = ui_zone_color(player_zone);
 
-    ui_panel(g_renderer, panel_x, panel_y, panel_w, panel_h,
-             ui_zone_color(player_zone));
+    ui_panel(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_MAIN);
+    ui_scanlines(g_renderer, panel_x, panel_y, panel_w, panel_h);
+
+    /* Header */
+    vf_draw_string("[MINIMAP]", panel_x + HUD_PAD_INNER,
+                   panel_y + HUD_PAD_INNER, 9, HUD_TEXT_DIM);
+
+    /* Separator */
+    float mm_sep_y = panel_y + HUD_PAD_INNER + HUD_ROW_H + 2.0f;
+    SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(g_renderer,
+        HUD_BORDER_MID.r, HUD_BORDER_MID.g, HUD_BORDER_MID.b, 80);
+    SDL_RenderDrawLineF(g_renderer,
+        panel_x + 4.0f, mm_sep_y, panel_x + panel_w - 4.0f, mm_sep_y);
 
     /* Map area coordinates */
-    float mmx  = panel_x;
-    float mmy  = 32.0f;          /* below the panel header */
-    float mmw  = 185.0f;
-    float mmh  = 148.0f;
+    float mmx  = panel_x + 4.0f;
+    float mmy  = mm_sep_y + 4.0f;
+    float mmw  = panel_w - 8.0f;
+    float mmh  = panel_y + panel_h - mmy - 4.0f;
     float range = 3500.0f;
     float scx  = mmw / (range * 2.0f);
     float scy  = mmh / (range * 2.0f);
     float mcx  = mmx + mmw * 0.5f;
     float mcy  = mmy + mmh * 0.5f;
 
-    /* Panel header — "URTHGRID" in zone accent color */
-    ui_panel_header(g_renderer, panel_x, 10.0f, panel_w, "URTHGRID",
-                    ui_zone_color(player_zone));
-
-    /* Background scanlines */
-    for (int row = 0; row <= 6; row++) {
-        float ly = mmy + row * (mmh / 6.0f);
-        Line  l  = {{mmx, ly}, {mmx + mmw, ly}};
-        Shape s  = {&l, 1, (SDL_Color){0, 30, 50, 160}};
-        vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
+    /* Draw grid cell background */
+    SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(g_renderer,
+        HUD_PANEL_DEEP.r, HUD_PANEL_DEEP.g, HUD_PANEL_DEEP.b, HUD_PANEL_DEEP.a);
+    {
+        int cell_sz = 5;
+        int cols = (int)(mmw / cell_sz);
+        int rows_mm = (int)(mmh / cell_sz);
+        for (int rr = 0; rr < rows_mm; rr++) {
+            for (int cc = 0; cc < cols; cc++) {
+                SDL_FRect cell = { mmx + cc * cell_sz, mmy + rr * cell_sz, 4.0f, 4.0f };
+                SDL_RenderFillRectF(g_renderer, &cell);
+            }
+        }
     }
+    (void)mm_zone_col;
 
     /* Home station — cyan cross */
     {
@@ -5077,90 +5342,60 @@ static void render_minimap(void)
         }
     }
 
-    /* Asteroids — 2-px grey crosses */
+    /* Asteroids — 1×1 px HUD_TEXT_DARK dots */
+    SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(g_renderer,
+        HUD_TEXT_DARK.r, HUD_TEXT_DARK.g, HUD_TEXT_DARK.b, HUD_TEXT_DARK.a);
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         if (!asteroids[i].active) continue;
         float ax = mcx + (asteroids[i].pos.x - player.pos.x) * scx;
         float ay = mcy + (asteroids[i].pos.y - player.pos.y) * scy;
         if (ax < mmx || ax > mmx + mmw || ay < mmy || ay > mmy + mmh) continue;
-        Line al[2] = {{{ax - 2, ay}, {ax + 2, ay}},
-                      {{ax, ay - 2}, {ax, ay + 2}}};
-        for (int j = 0; j < 2; j++) {
-            Shape s = {&al[j], 1, (SDL_Color){128, 128, 128, 255}};
-            vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-        }
+        SDL_FRect adot = {ax - 0.5f, ay - 0.5f, 1.0f, 1.0f};
+        SDL_RenderFillRectF(g_renderer, &adot);
     }
 
-    /* Enemy bullets — 2-px red crosses */
-    for (int i = 0; i < MAX_UFO_BULLETS; i++) {
-        if (!ufo_bullets[i].active) continue;
-        float bx = mcx + (ufo_bullets[i].pos.x - player.pos.x) * scx;
-        float by = mcy + (ufo_bullets[i].pos.y - player.pos.y) * scy;
-        if (bx < mmx || bx > mmx + mmw || by < mmy || by > mmy + mmh) continue;
-        Line bl[2] = {{{bx - 2, by}, {bx + 2, by}},
-                      {{bx, by - 2}, {bx, by + 2}}};
-        for (int j = 0; j < 2; j++) {
-            Shape s = {&bl[j], 1, (SDL_Color){255, 0, 0, 255}};
-            vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-        }
-    }
-
-    /* Enemy (UFO) — 4-px red cross */
+    /* Enemy (UFO) — 2×2 px dim cinnabar */
     if (ufo.active) {
         float ux = mcx + (ufo.pos.x - player.pos.x) * scx;
         float uy = mcy + (ufo.pos.y - player.pos.y) * scy;
         if (ux >= mmx && ux <= mmx + mmw && uy >= mmy && uy <= mmy + mmh) {
-            Line ul[2] = {{{ux - 4, uy}, {ux + 4, uy}},
-                          {{ux, uy - 4}, {ux, uy + 4}}};
-            for (int i = 0; i < 2; i++) {
-                Shape s = {&ul[i], 1, (SDL_Color){255, 60, 60, 255}};
-                vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-            }
+            SDL_SetRenderDrawColor(g_renderer,
+                HUD_CINNABAR_DIM.r, HUD_CINNABAR_DIM.g, HUD_CINNABAR_DIM.b, 200);
+            SDL_FRect edot = {ux - 1.0f, uy - 1.0f, 2.0f, 2.0f};
+            SDL_RenderFillRectF(g_renderer, &edot);
         }
     }
 
-    /* NPCs — green 2-px horizontal tick */
+    /* NPCs — dim green 2×2 dot */
     for (int i = 0; i < MAX_NPC; i++) {
         if (!npcs[i].active) continue;
         float nx = mcx + (npcs[i].pos.x - player.pos.x) * scx;
         float ny = mcy + (npcs[i].pos.y - player.pos.y) * scy;
         if (nx < mmx || nx > mmx + mmw || ny < mmy || ny > mmy + mmh) continue;
-        Line l  = {{nx - 2, ny}, {nx + 2, ny}};
-        Shape s = {&l, 1, (SDL_Color){60, 255, 60, 220}};
-        vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
+        SDL_SetRenderDrawColor(g_renderer, 20, 90, 8, 180);
+        SDL_FRect ndot = {nx - 1.0f, ny - 1.0f, 2.0f, 2.0f};
+        SDL_RenderFillRectF(g_renderer, &ndot);
     }
 
-    /* Player — bright white 5-px cross at map centre */
+    /* Player — bright cyan 3×3 rect at map centre */
+    SDL_SetRenderDrawColor(g_renderer,
+        HUD_TEXT_CYAN.r, HUD_TEXT_CYAN.g, HUD_TEXT_CYAN.b, 255);
     {
-        Line pl[2] = {{{mcx - 5, mcy}, {mcx + 5, mcy}},
-                      {{mcx, mcy - 5}, {mcx, mcy + 5}}};
-        for (int i = 0; i < 2; i++) {
-            Shape s = {&pl[i], 1, (SDL_Color){255, 255, 255, 255}};
-            vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
-        }
+        SDL_FRect pdot = {mcx - 1.5f, mcy - 1.5f, 3.0f, 3.0f};
+        SDL_RenderFillRectF(g_renderer, &pdot);
     }
 
-    /* Zone label + world coordinates beneath the map */
-    static const char *zone_names[] = {
-        "ZONE 0: HOME SPACE", "ZONE 1: INNER BELT",
-        "ZONE 2: DEEP VOID",  "ZONE 3: THE ABYSS"
+    /* Zone label beneath map */
+    static const char *mm_zn[] = {
+        "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
     };
-    static SDL_Color zone_cols[] = {
-        {100, 255, 255, 220},
-        {160, 210, 255, 220},
-        {200,  80, 255, 220},
-        {255,  80,  80, 220}
-    };
-    char coord_buf[48];
-    sprintf(coord_buf, "%.0f, %.0f", player.pos.x, player.pos.y);
-    vf_draw_string_centered(zone_names[player_zone],
-                            mmx + mmw * 0.5f, mmy + mmh + 14.0f, 9,
-                            zone_cols[player_zone]);
-    vf_draw_string_centered(coord_buf,
-                            mmx + mmw * 0.5f, mmy + mmh + 26.0f, 9,
-                            (SDL_Color){140, 180, 200, 180});
+    vf_draw_string_centered(mm_zn[player_zone],
+                            panel_x + panel_w * 0.5f,
+                            mmy + mmh + 6.0f, 7,
+                            ui_zone_color(player_zone));
 
-    /* Off-screen home arrow */
+    /* Off-screen home arrow (preserved) */
     if (player.active) {
         float home_sx = 0.0f - camera_pos.x;
         float home_sy = 0.0f - camera_pos.y;
@@ -5177,24 +5412,25 @@ static void render_minimap(void)
                 if (ddx < -0.001f) t = fminf(t, (45.0f         - SCREEN_WIDTH  * 0.5f) / ddx);
                 if (ddy >  0.001f) t = fminf(t, (SCREEN_HEIGHT - 45.0f - SCREEN_HEIGHT * 0.5f) / ddy);
                 if (ddy < -0.001f) t = fminf(t, (45.0f         - SCREEN_HEIGHT * 0.5f) / ddy);
-                float ax = SCREEN_WIDTH  * 0.5f + ddx * t;
-                float ay = SCREEN_HEIGHT * 0.5f + ddy * t;
-                float px = -ddy, py = ddx;
+                float arx = SCREEN_WIDTH  * 0.5f + ddx * t;
+                float ary = SCREEN_HEIGHT * 0.5f + ddy * t;
+                float arpx = -ddy, arpy = ddx;
                 float as = 11.0f;
                 Line arrow[3] = {
-                    {{ax + ddx * as,          ay + ddy * as},
-                     {ax - ddx * 8 + px * 7, ay - ddy * 8 + py * 7}},
-                    {{ax + ddx * as,          ay + ddy * as},
-                     {ax - ddx * 8 - px * 7, ay - ddy * 8 - py * 7}},
-                    {{ax - ddx * 8 + px * 7, ay - ddy * 8 + py * 7},
-                     {ax - ddx * 8 - px * 7, ay - ddy * 8 - py * 7}}
+                    {{arx + ddx * as,           ary + ddy * as},
+                     {arx - ddx * 8 + arpx * 7, ary - ddy * 8 + arpy * 7}},
+                    {{arx + ddx * as,           ary + ddy * as},
+                     {arx - ddx * 8 - arpx * 7, ary - ddy * 8 - arpy * 7}},
+                    {{arx - ddx * 8 + arpx * 7, ary - ddy * 8 + arpy * 7},
+                     {arx - ddx * 8 - arpx * 7, ary - ddy * 8 - arpy * 7}}
                 };
-                SDL_Color ac = {100, 255, 220, 200};
+                SDL_Color ac = HUD_TEXT_CYAN;
+                ac.a = 200;
                 for (int i = 0; i < 3; i++) {
                     Shape s = {&arrow[i], 1, ac};
                     vg_draw_shape(&s, (Vec2){0, 0}, 0.0f, 1.0f);
                 }
-                vf_draw_string_centered("HOME", ax, ay - 18.0f, 9,
+                vf_draw_string_centered("HOME", arx, ary - 18.0f, 9,
                                         (SDL_Color){100, 255, 200, 160});
             }
         }
@@ -5212,13 +5448,14 @@ static void render_minimap(void)
 static void render_overlays(void)
 {
     /* Score pop-floats (world coordinates — rendered while world camera is set) */
+    SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
     for (int i = 0; i < MAX_SCORE_FLOATS; i++) {
         if (!score_floats[i].active) continue;
-        float t    = score_floats[i].life;
+        float t     = score_floats[i].life;
         Uint8 alpha = (t > 0.8f) ? 255 : (Uint8)(t / 0.8f * 255);
-        SDL_Color fc = {255, 255, 100, alpha};
-        if (score_floats[i].value >= 200) fc = (SDL_Color){255, 150,  50, alpha};
-        if (score_floats[i].value >= 400) fc = (SDL_Color){255,  80,  80, alpha};
+        SDL_Color fc = HUD_TEXT_GOLD;  fc.a = alpha;
+        if (score_floats[i].value >= 200) { fc = HUD_AMBER;    fc.a = alpha; }
+        if (score_floats[i].value >= 400) { fc = HUD_CINNABAR; fc.a = alpha; }
         char temp_text[32];
         sprintf(temp_text, "+%d", score_floats[i].value);
         vf_draw_string_centered(temp_text,
@@ -5231,7 +5468,7 @@ static void render_overlays(void)
     /* Edge-wrap flash — bright border momentarily when ship wraps */
     if (edge_flash_timer > 0.0f) {
         float alpha = edge_flash_timer / 0.15f;
-        SDL_Color ef = {255, 255, 255, (Uint8)(alpha * 180)};
+        SDL_Color ef = HUD_BORDER_ACTIVE; ef.a = (Uint8)(alpha * 180);
         float m = 4.0f;
         Line el[4] = {
             {{m,                m},               {SCREEN_WIDTH - m, m}},
@@ -5243,12 +5480,41 @@ static void render_overlays(void)
         vg_draw_shape(&es, (Vec2){0, 0}, 0.0f, 1.0f);
     }
 
+    /* Autarch (god) mode banner */
+    if (god_mode) {
+        SDL_Color gm_col = ui_pulse(HUD_GOLD_BAR, game_time, 2.0f, 0.4f);
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        ui_panel(g_renderer, SCREEN_WIDTH / 2.0f - 200.0f, 4.0f, 400.0f, 28.0f,
+                 gm_col);
+        vf_draw_string_centered("AUTARCH MODE", SCREEN_WIDTH / 2.0f, 10.0f,
+                                14, gm_col);
+    }
+
+    /* Critical hull warning — show when on last life */
+    if (game_state == STATE_PLAYING && lives <= 1) {
+        SDL_Color warn = ui_pulse(HUD_CINNABAR, game_time, 3.0f, 0.5f);
+        ui_warning_chevrons(g_renderer, SCREEN_WIDTH / 2.0f - 28.0f,
+                            SCREEN_HEIGHT - 30.0f, warn);
+    }
+
+    /* Combo pop text */
+    if (combo_timer > 0.0f && combo_count >= 4 && g_settings.hud.show_combo) {
+        float ct = combo_timer;
+        Uint8 ca  = (ct > 0.3f) ? 255 : (Uint8)(ct / 0.3f * 255);
+        SDL_Color cc = HUD_AMBER; cc.a = ca;
+        char combuf[32];
+        sprintf(combuf, "x%d", combo_count);
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        vf_draw_string_centered(combuf, SCREEN_WIDTH / 2.0f,
+                                SCREEN_HEIGHT / 2.0f - 60.0f, 28, cc);
+    }
+
     /* Shop overlay */
     if (game_state == STATE_SHOP) {
         ui_panel(g_renderer, 50, 30, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 60,
-                 UI_CYAN);
+                 HUD_BORDER_MAIN);
         vf_draw_string_centered("HOME STATION EXCHANGE",
-                                SCREEN_WIDTH / 2.0f, 60, 20, UI_CYAN);
+                                SCREEN_WIDTH / 2.0f, 60, 20, HUD_TEXT_CYAN);
         vf_draw_string_centered("[ ESC ] CLOSE",
                                 SCREEN_WIDTH / 2.0f, 88, 11,
                                 (SDL_Color){120, 120, 140, 200});
@@ -5262,13 +5528,13 @@ static void render_overlays(void)
         #define SHOP_TOTAL 14
         for (int si = 0; si < SHOP_TOTAL && si < SHOP_ITEMS_PER_PAGE; si++) {
             float iy = 115.0f + si * 42.0f;
-            SDL_Color ic = (si == shop_sel) ? UI_GOLD : UI_WHITE;
+            SDL_Color ic = (si == shop_sel) ? HUD_TEXT_GOLD : HUD_TEXT_PRIMARY;
             if (si == shop_sel) {
                 ui_corner_brackets(g_renderer,
                                    80, iy - 4, SCREEN_WIDTH - 160, 36,
-                                   UI_GOLD, 10.0f);
+                                   HUD_TEXT_GOLD, 10.0f);
+                ui_cursor_chevron(g_renderer, 70.0f, iy, HUD_TEXT_CYAN);
             }
-            vf_draw_string(si == shop_sel ? "> " : "  ", 85.0f, iy, 13, ic);
             vf_draw_string(shop_names[si], 110.0f, iy, 13, ic);
         }
         #undef SHOP_TOTAL
@@ -5277,19 +5543,19 @@ static void render_overlays(void)
                 res_void_steel, res_autodyne_frags, res_hex_modules,
                 res_isotopes, res_ammo, res_rockets);
         vf_draw_string_centered(inv, SCREEN_WIDTH / 2.0f,
-                                SCREEN_HEIGHT - 70, 10, UI_GREY);
+                                SCREEN_HEIGHT - 70, 10, HUD_TEXT_DIM);
     }
 
     /* Warp-menu overlay */
     if (game_state == STATE_WARP_MENU) {
         ui_panel(g_renderer, 190, 140, SCREEN_WIDTH - 380, SCREEN_HEIGHT - 280,
-                 UI_CYAN);
+                 HUD_BORDER_MAIN);
         vf_draw_string_centered("WARP DRIVE \xe2\x80\x94 SAVED LOCI",
-                                SCREEN_WIDTH / 2.0f, 165, 16, UI_CYAN);
+                                SCREEN_WIDTH / 2.0f, 165, 16, HUD_TEXT_CYAN);
         if (warp_loc_count == 0) {
             vf_draw_string_centered("NO LOCI SAVED",
                                     SCREEN_WIDTH / 2.0f, 230, 11,
-                                    (SDL_Color){160, 160, 180, 200});
+                                    HUD_TEXT_DIM);
         } else {
             for (int wi = 0; wi < warp_loc_count; wi++) {
                 float wy   = 200.0f + wi * 40.0f;
@@ -5299,20 +5565,22 @@ static void render_overlays(void)
                 int in_range = (wdist <= warp_drive_range) &&
                                (fuel_current >= 20.0f);
                 SDL_Color wc = (wi == warp_menu_sel)
-                               ? UI_GOLD
+                               ? HUD_TEXT_GOLD
                                : in_range
-                                 ? UI_GREEN
-                                 : UI_CINNABAR;
+                                 ? HUD_GREEN
+                                 : HUD_CINNABAR;
                 char wbuf[80];
                 sprintf(wbuf, "%s  [%.0fu]%s",
                         warp_locs[wi].label, wdist,
                         in_range ? "" : " OUT OF RANGE");
+                if (wi == warp_menu_sel)
+                    ui_cursor_chevron(g_renderer, 200.0f, wy, HUD_TEXT_CYAN);
                 vf_draw_string_centered(wbuf, SCREEN_WIDTH / 2.0f, wy, 13, wc);
             }
         }
         vf_draw_string_centered("ENTER=WARP  ESC=CANCEL  (20 FUEL)",
                                 SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT - 165, 11,
-                                (SDL_Color){140, 140, 160, 200});
+                                HUD_TEXT_DIM);
     }
 
     /* Crosshair — drawn last so it sits on top of everything */
@@ -5321,7 +5589,7 @@ static void render_overlays(void)
          game_state == STATE_ATTRACT_GAMEPLAY)) {
         int mx, my;
         SDL_GetMouseState(&mx, &my);
-        SDL_Color xhc = {100, 220, 255, 200};
+        SDL_Color xhc = HUD_TEXT_CYAN; xhc.a = 200;
         float fx = (float)mx, fy = (float)my;
         if (settings_crosshair_style == 1) {   /* Cross with centre gap */
             Line cl[4] = {
@@ -5346,13 +5614,6 @@ static void render_overlays(void)
         }
     }
 
-    /* FPS counter */
-    if (settings_show_fps) {
-        char fps_buf[16];
-        sprintf(fps_buf, "%d FPS", fps_display_val);
-        vg_set_camera((Vec2){0, 0});
-        vf_draw_string(fps_buf, 8, 8, 14, (SDL_Color){80, 200, 80, 200});
-    }
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
@@ -5373,13 +5634,14 @@ static void render_menus(void)
         ui_particle_drift(g_renderer, game_time, 40);
 
         /* Central hero panel */
-        ui_panel(g_renderer, 340, 200, 600, 520, UI_CYAN);
+        ui_panel(g_renderer, 340, 200, 600, 520, HUD_BORDER_MAIN);
 
         float panel_cx = 340.0f + 600.0f / 2.0f;  /* 640 */
 
         /* Pulsing title */
         float title_sz = 52.0f * (1.0f + 0.04f * sinf(title_timer * 2.0f));
-        vf_draw_string_centered("FULIGIN", panel_cx, 260, title_sz, UI_CYAN);
+        SDL_Color title_col = ui_pulse(HUD_TEXT_CYAN, game_time, 0.8f, 0.15f);
+        vf_draw_string_centered("FULIGIN", panel_cx, 260, title_sz, title_col);
 
         /* Subtitle — dim cyan */
         SDL_Color dim_cyan = {0, 180, 180, 180};
@@ -5398,15 +5660,15 @@ static void render_menus(void)
         float item_step    = 60.0f;
         for (int i = 0; i < 3; i++) {
             int   is_sel = (menu_selection == i);
-            SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+            SDL_Color ic = is_sel ? HUD_TEXT_GOLD : HUD_TEXT_PRIMARY;
             float iy     = item_y_start + i * item_step;
             vf_draw_string_centered(menu_labels[i], panel_cx, iy, 20, ic);
             if (is_sel) {
-                /* Corner brackets: approx CX-120, iy-6, 240, 30 */
+                ui_cursor_chevron(g_renderer, panel_cx - 130.0f, iy, HUD_TEXT_CYAN);
                 ui_corner_brackets(g_renderer,
                                    panel_cx - 120.0f, iy - 6.0f,
                                    240.0f, 30.0f,
-                                   UI_GOLD, 12.0f);
+                                   HUD_TEXT_GOLD, 12.0f);
             }
         }
 
@@ -5419,15 +5681,15 @@ static void render_menus(void)
         SDL_RenderFillRect(g_renderer, &overlay);
 
         /* Center panel */
-        ui_panel(g_renderer, 200, 40, 880, SCREEN_HEIGHT - 80, UI_CYAN);
+        ui_panel(g_renderer, 200, 40, 880, SCREEN_HEIGHT - 80, HUD_BORDER_MAIN);
 
         float panel_cx = 200.0f + 880.0f / 2.0f;  /* 640 */
 
         /* Header */
-        vf_draw_string_centered("STASIS", panel_cx, 65, 32, UI_WHITE);
+        vf_draw_string_centered("STASIS", panel_cx, 65, 32, HUD_TEXT_PRIMARY);
 
         /* Pause options section */
-        ui_panel_header(g_renderer, 200, 105, 880, "PAUSE OPTIONS", UI_CYAN);
+        ui_panel_header(g_renderer, 200, 105, 880, "PAUSE OPTIONS", HUD_TEXT_CYAN);
 
         const char *pause_opts[] = {
             "S: SAVE GAME",
@@ -5437,7 +5699,7 @@ static void render_menus(void)
         };
         float opt_y = 125.0f;
         for (int i = 0; i < 4; i++) {
-            vf_draw_string_centered(pause_opts[i], panel_cx, opt_y, 17, UI_WHITE);
+            vf_draw_string_centered(pause_opts[i], panel_cx, opt_y, 17, HUD_TEXT_PRIMARY);
             opt_y += 32.0f;
         }
 
@@ -5447,7 +5709,7 @@ static void render_menus(void)
         SDL_RenderDrawLine(g_renderer, 210, 255, 1070, 255);
 
         /* Relics section */
-        ui_panel_header(g_renderer, 200, 265, 880, "RELIQUARIES CARRIED", UI_CYAN);
+        ui_panel_header(g_renderer, 200, 265, 880, "RELIQUARIES CARRIED", HUD_TEXT_CYAN);
 
         /* ── Relic log: map active upgrades to name+description rows ── */
         typedef struct { const char *name; const char *desc; } RelicEntry;
@@ -5494,196 +5756,272 @@ static void render_menus(void)
             for (int i = 0; i < shown; i++) {
                 char icon[4] = {relics[i].name[0], relics[i].name[1],
                                 relics[i].name[2], '\0'};
-                vf_draw_string(icon,            220, ry, 11, UI_CYAN);
-                vf_draw_string(relics[i].name,  285, ry, 11, UI_CYAN);
-                vf_draw_string(relics[i].desc,  560, ry,  9, UI_GREY);
+                vf_draw_string(icon,            220, ry, 11, HUD_TEXT_CYAN);
+                vf_draw_string(relics[i].name,  285, ry, 11, HUD_TEXT_CYAN);
+                vf_draw_string(relics[i].desc,  560, ry,  9, HUD_TEXT_DIM);
                 ry += row_h;
             }
         } else {
             vf_draw_string_centered("NO RELIQUARIES CARRIED",
-                                    panel_cx, 310, 14, UI_GREY);
+                                    panel_cx, 310, 14, HUD_TEXT_DIM);
         }
 
     /* =========== STATE: SETTINGS =========== */
     } else if (game_state == STATE_SETTINGS) {
-        const char *tab_names[] = {"VIDEO", "AUDIO", "GAMEPLAY", "CONTROLS"};
+        /* Tab names for the 9-category settings menu */
+        const char *tab_names[] = {
+            "VIDEO", "GRAPHICS", "AUDIO", "CONTROLS",
+            "HUD", "ACCESS", "GAMEPLAY", "WORLD", "SYSTEM"
+        };
+        const int tab_count = 9;
 
-        /* Outer panel */
-        ui_panel(g_renderer, 100, 20, SCREEN_WIDTH - 200, SCREEN_HEIGHT - 40, UI_STEEL);
+        /* Outer 800×640 center panel */
+        float sp_x = (SCREEN_WIDTH  - 800) / 2.0f;   /* 240 */
+        float sp_y = (SCREEN_HEIGHT - 640) / 2.0f;   /* 160 */
+        float sp_w = 800.0f, sp_h = 640.0f;
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        ui_panel(g_renderer, sp_x, sp_y, sp_w, sp_h, HUD_BORDER_MAIN);
 
-        float panel_cx = 100.0f + (SCREEN_WIDTH - 200) / 2.0f;  /* 640 */
+        float panel_cx = sp_x + sp_w / 2.0f;  /* 640 */
 
         /* Header */
-        vf_draw_string_centered("AUTODYNE CONFIGURATION", panel_cx, 45, 20, UI_CYAN);
+        vf_draw_string_centered("AUTODYNE CONFIGURATION", panel_cx,
+                                sp_y + 22.0f, 18, HUD_TEXT_CYAN);
 
-        /* Tab strip at y=75, each tab w=220 h=30, spaced 250px */
-        for (int t = 0; t < 4; t++) {
-            float tx     = 120.0f + t * 250.0f;
+        /* Tab strip — two rows of angled mini-tabs, 5 on top row, 4 on second */
+        float tab_w = 140.0f, tab_h = 26.0f;
+        float tab_row1_y = sp_y + 48.0f;
+        float tab_row2_y = tab_row1_y + tab_h + 4.0f;
+        float tab_row1_x = sp_x + 10.0f;
+        float tab_row2_x = sp_x + 10.0f + (tab_w + 6.0f) * 0.5f;  /* offset 2nd row */
+        for (int t = 0; t < tab_count; t++) {
+            int   row   = (t < 5) ? 0 : 1;
+            int   col   = (t < 5) ? t : t - 5;
+            float tx    = (row == 0 ? tab_row1_x : tab_row2_x) + col * (tab_w + 6.0f);
+            float ty    = (row == 0) ? tab_row1_y : tab_row2_y;
             int   is_sel = (t == settings_tab);
-            SDL_Color border = is_sel ? UI_CYAN : UI_STEEL;
-            ui_panel(g_renderer, tx, 75, 220, 30, border);
-            SDL_Color tc = is_sel ? UI_GOLD : UI_GREY;
-            vf_draw_string_centered(tab_names[t], tx + 110.0f, 83, 13, tc);
+            SDL_Color border = is_sel ? HUD_BORDER_ACTIVE : HUD_BORDER_DIM;
+            ui_panel_angled(g_renderer, tx, ty, tab_w, tab_h, 6.0f, border);
+            SDL_Color tc = is_sel ? HUD_TEXT_GOLD : HUD_TEXT_DIM;
+            vf_draw_string_centered(tab_names[t], tx + tab_w / 2.0f,
+                                    ty + 7.0f, 11, tc);
         }
 
+        /* Content area starts below tabs */
+        float base_y = tab_row2_y + tab_h + 16.0f;
+        float step   = 44.0f;
+        float row_x  = sp_x + 40.0f;
+
+        /* Helper macro: draw one settings row at index i with label and value */
+        #define DRAW_SETTINGS_ROW(idx, label, valstr) \
+        do { \
+            int   _sel = (settings_row == (idx)); \
+            float _y   = base_y + (idx) * step; \
+            SDL_Color _lc = _sel ? HUD_TEXT_CYAN  : HUD_TEXT_DIM; \
+            SDL_Color _vc = _sel ? HUD_TEXT_GOLD  : HUD_TEXT_PRIMARY; \
+            if (_sel) ui_cursor_chevron(g_renderer, row_x - 16.0f, _y, HUD_TEXT_CYAN); \
+            vf_draw_string((label),   row_x,         _y, 13, _lc); \
+            vf_draw_string((valstr),  row_x + 340.0f, _y, 13, _vc); \
+            if (_sel) { \
+                float _bw = sp_w - 80.0f; \
+                ui_corner_brackets(g_renderer, row_x - 4.0f, _y - 6.0f, \
+                                   _bw, 22.0f, HUD_BORDER_ACTIVE, 8.0f); \
+            } \
+        } while (0)
+
         const char *on_off[]     = {"OFF", "ON"};
-        const char *dz_names[]   = {"LOW", "MED", "HIGH"};
-        const char *ch_names[]   = {"OFF", "CROSS", "DOT"};
         const char *glow_names[] = {"OFF", "LOW", "MED", "HIGH", "MAX"};
-        float base_y = 140.0f;
-        float step   = 52.0f;
+        const char *dz_names[]   = {"LOW", "MED", "HIGH"};
+        const char *ch_names[]   = {"NONE", "DOT", "CROSS", "CHEVRON"};
+        const char *cb_names[]   = {"NONE", "DEUTERANOPIA", "PROTANOPIA", "TRITANOPIA"};
+        const char *diff_names[] = {"AUTODYNE", "STANDARD", "CACOGEN"};
+        char _vbuf[64];
 
         /* ── VIDEO tab ── */
         if (settings_tab == 0) {
-            char bufs[4][64];
-            sprintf(bufs[0], "DISPLAY:  < %s >",
-                    settings_fullscreen ? "FULLSCREEN" : "WINDOWED");
-            sprintf(bufs[1], "PHOSPHOR GLOW:  < %s >", glow_names[settings_glow]);
-            sprintf(bufs[2], "SHOW FPS:  < %s >", on_off[settings_show_fps]);
-            sprintf(bufs[3], "SCREEN SHAKE:  < %s >", on_off[settings_screen_shake]);
-            for (int i = 0; i < 4; i++) {
-                int   is_sel = (menu_selection == i);
-                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
-                float iy     = base_y + i * step;
-                vf_draw_string_centered(bufs[i], panel_cx, iy, 16, ic);
-                if (is_sel) {
-                    float bw = (float)strlen(bufs[i]) * 16 * 0.7f + 20.0f;
-                    ui_corner_brackets(g_renderer,
-                                       panel_cx - bw / 2.0f, iy - 8.0f,
-                                       bw, 24.0f, UI_GOLD, 10.0f);
-                }
-            }
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "DISPLAY MODE",
+                g_settings.video.fullscreen ? "FULLSCREEN" : "WINDOWED");
+            sprintf(_vbuf, "%d", g_settings.video.refresh_rate);
+            DRAW_SETTINGS_ROW(r++, "REFRESH RATE", _vbuf);
+            DRAW_SETTINGS_ROW(r++, "VSYNC",
+                on_off[g_settings.video.vsync]);
+
+        /* ── GRAPHICS tab ── */
+        } else if (settings_tab == 1) {
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "PHOSPHOR GLOW",
+                glow_names[g_settings.graphics.glow_intensity]);
+            sprintf(_vbuf, "%d", g_settings.graphics.particle_count);
+            DRAW_SETTINGS_ROW(r++, "PARTICLE DRIFT", _vbuf);
+            DRAW_SETTINGS_ROW(r++, "CRT SCANLINES",
+                on_off[g_settings.graphics.scanlines]);
+            DRAW_SETTINGS_ROW(r++, "VIGNETTE",
+                on_off[g_settings.graphics.vignette]);
+            DRAW_SETTINGS_ROW(r++, "MOTION BLUR",
+                on_off[g_settings.graphics.motion_blur]);
+            DRAW_SETTINGS_ROW(r++, "SCREEN SHAKE",
+                on_off[g_settings.graphics.screen_shake]);
 
         /* ── AUDIO tab ── */
-        } else if (settings_tab == 1) {
-            char b0[64], b1[64], b2[64], b3[64], b4[64];
-            sprintf(b0, "MASTER VOLUME:  < %d%% >", settings_volume);
-            sprintf(b1, "SFX VOLUME:  < %d%% >",    settings_sfx_vol);
-            sprintf(b2, "MUSIC VOLUME:  < %d%% >",  settings_music_vol);
-            sprintf(b3, "DYNAMIC RANGE:  < %s >",   on_off[settings_dynamic_range]);
-            sprintf(b4, "MUTE UNFOCUSED:  < %s >",  on_off[settings_mute_unfocused]);
-            const char *items[] = {b0, b1, b2, b3, b4};
-            for (int i = 0; i < 5; i++) {
-                int   is_sel = (menu_selection == i);
-                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
-                float iy     = base_y + i * step;
-                vf_draw_string_centered(items[i], panel_cx, iy, 16, ic);
-                if (is_sel) {
-                    float bw = (float)strlen(items[i]) * 16 * 0.7f + 20.0f;
-                    ui_corner_brackets(g_renderer,
-                                       panel_cx - bw / 2.0f, iy - 8.0f,
-                                       bw, 24.0f, UI_GOLD, 10.0f);
-                }
-            }
-
-        /* ── GAMEPLAY tab ── */
         } else if (settings_tab == 2) {
-            char b0[64], b1[64], b2[64];
-            sprintf(b0, "DIFFICULTY:  < %s >",     difficulty_names[difficulty]);
-            sprintf(b1, "AUTOFIRE:  < %s >",       on_off[settings_autofire]);
-            sprintf(b2, "INVERT MOUSE Y:  < %s >", on_off[settings_invert_y]);
-            const char *items[] = {b0, b1, b2};
-            for (int i = 0; i < 3; i++) {
-                int   is_sel = (menu_selection == i);
-                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
-                float iy     = base_y + i * step;
-                vf_draw_string_centered(items[i], panel_cx, iy, 16, ic);
-                if (is_sel) {
-                    float bw = (float)strlen(items[i]) * 16 * 0.7f + 20.0f;
-                    ui_corner_brackets(g_renderer,
-                                       panel_cx - bw / 2.0f, iy - 8.0f,
-                                       bw, 24.0f, UI_GOLD, 10.0f);
-                }
-            }
+            int r = 0;
+            sprintf(_vbuf, "%d%%", g_settings.audio.master_vol);
+            DRAW_SETTINGS_ROW(r++, "MASTER VOLUME", _vbuf);
+            sprintf(_vbuf, "%d%%", g_settings.audio.music_vol);
+            DRAW_SETTINGS_ROW(r++, "MUSIC VOLUME",  _vbuf);
+            sprintf(_vbuf, "%d%%", g_settings.audio.sfx_vol);
+            DRAW_SETTINGS_ROW(r++, "SFX VOLUME",    _vbuf);
+            sprintf(_vbuf, "%d%%", g_settings.audio.ui_vol);
+            DRAW_SETTINGS_ROW(r++, "UI VOLUME",     _vbuf);
+            DRAW_SETTINGS_ROW(r++, "STREAMER MODE",
+                on_off[g_settings.audio.streamer_mode]);
 
         /* ── CONTROLS tab ── */
         } else if (settings_tab == 3) {
-            const char *scheme_names[] = {"ARCADE", "TWIN-STICK"};
-            char b0[64], b1[64], b2[64], b3[64], b4[64];
-            sprintf(b0, "MOUSE AIM:  < %s >",           on_off[settings_mouse_aim]);
-            sprintf(b1, "CROSSHAIR:  < %s >",           ch_names[settings_crosshair_style]);
-            sprintf(b2, "CONTROLLER DEADZONE:  < %s >", dz_names[settings_controller_deadzone]);
-            sprintf(b3, "CONTROL SCHEME:  < %s >",      scheme_names[settings_control_scheme]);
-            sprintf(b4, "KEYBINDS  >");
-            const char *items[] = {b0, b1, b2, b3, b4};
-            for (int i = 0; i < 5; i++) {
-                int   is_sel = (menu_selection == i);
-                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
-                float iy     = base_y + i * step;
-                vf_draw_string_centered(items[i], panel_cx, iy, 16, ic);
-                if (is_sel) {
-                    float bw = (float)strlen(items[i]) * 16 * 0.7f + 20.0f;
-                    ui_corner_brackets(g_renderer,
-                                       panel_cx - bw / 2.0f, iy - 8.0f,
-                                       bw, 24.0f, UI_GOLD, 10.0f);
-                }
-            }
-            if (g_controller) {
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "MOUSE AIM",
+                on_off[g_settings.controls.mouse_aim]);
+            sprintf(_vbuf, "%d", g_settings.controls.mouse_sensitivity);
+            DRAW_SETTINGS_ROW(r++, "MOUSE SENSITIVITY", _vbuf);
+            DRAW_SETTINGS_ROW(r++, "AUTOFIRE",
+                on_off[g_settings.controls.autofire]);
+            DRAW_SETTINGS_ROW(r++, "AIM ASSIST",
+                on_off[g_settings.controls.aim_assist]);
+            DRAW_SETTINGS_ROW(r++, "CTRL DEADZONE",
+                dz_names[g_settings.controls.ctrl_deadzone]);
+            DRAW_SETTINGS_ROW(r++, "INVERT Y",
+                on_off[g_settings.controls.invert_y]);
+            DRAW_SETTINGS_ROW(r++, "KEYBINDS", ">");
+            if (g_controller)
                 vf_draw_string_centered("CONTROLLER CONNECTED",
-                                        panel_cx, SCREEN_HEIGHT - 100,
-                                        12, UI_GREEN);
-            }
+                                        panel_cx, sp_y + sp_h - 40.0f,
+                                        11, HUD_GREEN);
+
+        /* ── HUD tab ── */
+        } else if (settings_tab == 4) {
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "SHOW FPS",
+                on_off[g_settings.hud.show_fps]);
+            DRAW_SETTINGS_ROW(r++, "SHOW MINIMAP",
+                on_off[g_settings.hud.show_minimap]);
+            DRAW_SETTINGS_ROW(r++, "CROSSHAIR",
+                ch_names[g_settings.hud.crosshair]);
+            sprintf(_vbuf, "%d%%", g_settings.hud.hud_scale);
+            DRAW_SETTINGS_ROW(r++, "HUD SCALE",   _vbuf);
+            DRAW_SETTINGS_ROW(r++, "SHOW COMBO",
+                on_off[g_settings.hud.show_combo]);
+            DRAW_SETTINGS_ROW(r++, "SHOW ZONE NAME",
+                on_off[g_settings.hud.show_zone_name]);
+
+        /* ── ACCESSIBILITY tab ── */
+        } else if (settings_tab == 5) {
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "COLORBLIND MODE",
+                cb_names[g_settings.accessibility.colorblind]);
+            DRAW_SETTINGS_ROW(r++, "HIGH CONTRAST",
+                on_off[g_settings.accessibility.high_contrast]);
+            sprintf(_vbuf, "%+d", g_settings.accessibility.font_size_delta);
+            DRAW_SETTINGS_ROW(r++, "FONT SIZE DELTA", _vbuf);
+            DRAW_SETTINGS_ROW(r++, "REDUCE MOTION",
+                on_off[g_settings.accessibility.reduce_motion]);
+
+        /* ── GAMEPLAY tab ── */
+        } else if (settings_tab == 6) {
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "DIFFICULTY",
+                diff_names[g_settings.gameplay.difficulty]);
+            sprintf(_vbuf, "%d", g_settings.gameplay.starting_lives);
+            DRAW_SETTINGS_ROW(r++, "STARTING LIVES", _vbuf);
+
+        /* ── WORLD tab ── */
+        } else if (settings_tab == 7) {
+            int r = 0;
+            sprintf(_vbuf, "%u", (unsigned)g_settings.world.seed);
+            DRAW_SETTINGS_ROW(r++, "WORLD SEED",        _vbuf);
+            sprintf(_vbuf, "%.2f", g_settings.world.asteroid_density);
+            DRAW_SETTINGS_ROW(r++, "ASTEROID DENSITY",  _vbuf);
+            sprintf(_vbuf, "%.2f", g_settings.world.enemy_density);
+            DRAW_SETTINGS_ROW(r++, "ENEMY DENSITY",     _vbuf);
+            sprintf(_vbuf, "%.2f", g_settings.world.loot_multiplier);
+            DRAW_SETTINGS_ROW(r++, "LOOT MULTIPLIER",   _vbuf);
+            sprintf(_vbuf, "%d",   g_settings.world.zone_sharpness);
+            DRAW_SETTINGS_ROW(r++, "ZONE SHARPNESS",    _vbuf);
+            sprintf(_vbuf, "%d",   g_settings.world.starting_zone);
+            DRAW_SETTINGS_ROW(r++, "STARTING ZONE",     _vbuf);
+
+        /* ── SYSTEM tab ── */
+        } else if (settings_tab == 8) {
+            int r = 0;
+            DRAW_SETTINGS_ROW(r++, "SHOW INTRO",
+                on_off[g_settings.show_intro]);
+            DRAW_SETTINGS_ROW(r++, "RESET DEFAULTS", "ENTER");
+            DRAW_SETTINGS_ROW(r++, "SAVE & QUIT",    "ENTER");
         }
 
+        #undef DRAW_SETTINGS_ROW
+
         /* Bottom instructions */
-        SDL_Color dim_grey = {74, 74, 90, 160};
-        vf_draw_string_centered("Q / E   OR   LB / RB   TO   SWITCH   TABS",
-                                panel_cx, SCREEN_HEIGHT - 60, 10, dim_grey);
-        vf_draw_string_centered("ESC TO RETURN",
-                                panel_cx, SCREEN_HEIGHT - 42, 10, dim_grey);
+        vf_draw_string_centered(
+            "[ Q / E ]  PREV/NEXT TAB    [ UP / DN ]  SELECT ROW    "
+            "[ LT / RT ]  CHANGE VALUE    [ ESC ]  BACK",
+            panel_cx, sp_y + sp_h - 20.0f, 9, HUD_TEXT_DARK);
 
     /* =========== STATE: KEYBINDS =========== */
     } else if (game_state == STATE_KEYBINDS) {
-        ui_panel(g_renderer, 80, 20, SCREEN_WIDTH - 160, SCREEN_HEIGHT - 40, UI_STEEL);
+        ui_panel(g_renderer, 80, 20, SCREEN_WIDTH - 160, SCREEN_HEIGHT - 40,
+                 HUD_BORDER_MAIN);
 
         float panel_cx = 80.0f + (SCREEN_WIDTH - 160) / 2.0f;  /* 640 */
 
-        SDL_Color kb_tc = (keybind_page == 0) ? UI_GOLD : UI_GREY;
-        SDL_Color ct_tc = (keybind_page == 1) ? UI_GOLD : UI_GREY;
+        SDL_Color kb_tc = (keybind_page == 0) ? HUD_TEXT_GOLD : HUD_TEXT_DIM;
+        SDL_Color ct_tc = (keybind_page == 1) ? HUD_TEXT_GOLD : HUD_TEXT_DIM;
 
-        vf_draw_string_centered("KEYBINDS", panel_cx, 35, 22, UI_CYAN);
+        vf_draw_string_centered("KEYBINDS", panel_cx, 35, 22, HUD_TEXT_CYAN);
         vf_draw_string("KEYBOARD",   panel_cx - 200.0f, 70, 16, kb_tc);
         vf_draw_string("CONTROLLER", panel_cx +  40.0f, 70, 16, ct_tc);
 
-        SDL_Color dim_grey = {74, 74, 90, 160};
         vf_draw_string_centered("Q / E   TO   SWITCH   PAGES",
-                                panel_cx, SCREEN_HEIGHT - 60, 11, dim_grey);
+                                panel_cx, SCREEN_HEIGHT - 60, 11, HUD_TEXT_DARK);
         vf_draw_string_centered("ESC TO RETURN",
-                                panel_cx, SCREEN_HEIGHT - 38, 11, dim_grey);
+                                panel_cx, SCREEN_HEIGHT - 38, 11, HUD_TEXT_DARK);
 
         if (rebinding_action >= 0) {
             vf_draw_string_centered("PRESS ANY KEY",
                                     panel_cx,
-                                    SCREEN_HEIGHT / 2.0f - 20, 28, UI_AMBER);
+                                    SCREEN_HEIGHT / 2.0f - 20, 28, HUD_AMBER);
             vf_draw_string_centered("ESC TO CANCEL",
                                     panel_cx,
-                                    SCREEN_HEIGHT / 2.0f + 30, 16, UI_GREY);
+                                    SCREEN_HEIGHT / 2.0f + 30, 16, HUD_TEXT_DIM);
         } else if (ctrl_rebinding_action >= 0) {
             vf_draw_string_centered("PRESS CONTROLLER BUTTON",
                                     panel_cx,
-                                    SCREEN_HEIGHT / 2.0f - 20, 24, UI_AMBER);
+                                    SCREEN_HEIGHT / 2.0f - 20, 24, HUD_AMBER);
             vf_draw_string_centered("START/BACK RESERVED   ESC TO CANCEL",
                                     panel_cx,
-                                    SCREEN_HEIGHT / 2.0f + 30, 14, UI_GREY);
+                                    SCREEN_HEIGHT / 2.0f + 30, 14, HUD_TEXT_DIM);
         } else if (keybind_page == 0) {
             /* Keyboard binds list */
             vf_draw_string_centered("ENTER TO REBIND",
-                                    panel_cx, 100, 12, dim_grey);
+                                    panel_cx, 100, 12, HUD_TEXT_DARK);
             float kb_row_h = (float)(SCREEN_HEIGHT - 160) / KB_COUNT;
             if (kb_row_h > 44.0f) kb_row_h = 44.0f;
             for (int i = 0; i < KB_COUNT; i++) {
                 int   is_sel = (keybind_selection == i);
-                SDL_Color ic = is_sel ? UI_GOLD : UI_WHITE;
+                SDL_Color ic = is_sel ? HUD_TEXT_GOLD : HUD_TEXT_PRIMARY;
                 const char *kname = SDL_GetScancodeName(keybinds[i]);
                 char row[64];
                 sprintf(row, "%-12s  %s", kb_action_names[i], kname);
                 float y = 120.0f + i * kb_row_h;
+                if (is_sel)
+                    ui_cursor_chevron(g_renderer, panel_cx - 200.0f, y,
+                                      HUD_TEXT_CYAN);
                 vf_draw_string_centered(row, panel_cx, y, 16, ic);
                 if (is_sel) {
                     float bw = (float)strlen(row) * 16 * 0.7f + 20.0f;
                     ui_corner_brackets(g_renderer,
                                        panel_cx - bw / 2.0f, y - 8.0f,
-                                       bw, 24.0f, UI_GOLD, 10.0f);
+                                       bw, 24.0f, HUD_TEXT_GOLD, 10.0f);
                 }
             }
         } else {
@@ -5696,7 +6034,7 @@ static void render_menus(void)
                 vf_draw_string_centered("NO CONTROLLER DETECTED",
                                         panel_cx,
                                         SCREEN_HEIGHT - 90, 14,
-                                        UI_CINNABAR);
+                                        HUD_CINNABAR);
             }
         }
 
@@ -5706,32 +6044,34 @@ static void render_menus(void)
         ui_particle_drift(g_renderer, game_time, 25);
 
         /* Panel */
-        ui_panel(g_renderer, 280, 80, 720, 750, UI_GOLD);
+        ui_panel(g_renderer, 280, 80, 720, 750, HUD_GOLD_BAR);
 
         float panel_cx = 280.0f + 720.0f / 2.0f;  /* 640 */
 
         /* Header */
-        vf_draw_string_centered("THE FALLEN DRIFTERS", panel_cx, 115, 28, UI_GOLD);
+        vf_draw_string_centered("THE FALLEN DRIFTERS", panel_cx, 115, 28,
+                                HUD_TEXT_GOLD);
 
         /* Score entries */
         for (int i = 0; i < 5; i++) {
             float ey = 210.0f + i * 90.0f;
             char rank_buf[4];
             sprintf(rank_buf, "%d.", i + 1);
-            vf_draw_string_centered(rank_buf,                  panel_cx - 160.0f, ey, 20, UI_GREY);
-            vf_draw_string_centered(high_scores[i].initials,   panel_cx -  40.0f, ey, 20, UI_CYAN);
+            vf_draw_string_centered(rank_buf,                  panel_cx - 160.0f, ey, 20, HUD_TEXT_DIM);
+            vf_draw_string_centered(high_scores[i].initials,   panel_cx -  40.0f, ey, 20, HUD_TEXT_CYAN);
             char score_buf[16];
             sprintf(score_buf, "%05d", high_scores[i].score);
-            vf_draw_string_centered(score_buf,                 panel_cx + 120.0f, ey, 20, UI_WHITE);
+            vf_draw_string_centered(score_buf,                 panel_cx + 120.0f, ey, 20, HUD_TEXT_PRIMARY);
             /* AUTARCH label above top entry */
             if (i == 0) {
-                vf_draw_string_centered("AUTARCH", panel_cx, ey - 20.0f, 9, UI_GOLD);
+                vf_draw_string_centered("AUTARCH", panel_cx, ey - 20.0f, 9,
+                                        HUD_TEXT_GOLD);
             }
         }
 
         /* Instruction */
         vf_draw_string_centered("PRESS SPACE TO RETURN TO THE DRIFT",
-                                panel_cx, SCREEN_HEIGHT - 80, 12, UI_GREY);
+                                panel_cx, SCREEN_HEIGHT - 80, 12, HUD_TEXT_DIM);
 
     /* =========== STATE: GAME OVER =========== */
     } else if (game_state == STATE_GAMEOVER) {
@@ -5739,42 +6079,44 @@ static void render_menus(void)
         ui_particle_drift(g_renderer, game_time, 50);
 
         /* Panel */
-        ui_panel(g_renderer, 290, 280, 700, 340, UI_CINNABAR);
+        ui_panel(g_renderer, 290, 280, 700, 340, HUD_CINNABAR);
 
         float panel_cx = 290.0f + 700.0f / 2.0f;  /* 640 */
 
-        vf_draw_string_centered("DRIFT ENDS", panel_cx, 315, 42, UI_CINNABAR);
+        SDL_Color go_col = ui_pulse(HUD_CINNABAR, game_time, 1.5f, 0.3f);
+        vf_draw_string_centered("DRIFT ENDS", panel_cx, 315, 42, go_col);
 
-        SDL_Color dim_white = {240, 240, 240, 160};
         vf_draw_string_centered("THE AUTODYNE IS LOST TO THE VOID",
-                                panel_cx, 380, 13, dim_white);
+                                panel_cx, 380, 13, HUD_TEXT_DIM);
 
         char final_score[48];
         sprintf(final_score, "FINAL CHRONICLE: %d", score);
-        vf_draw_string_centered(final_score, panel_cx, 420, 18, UI_WHITE);
+        vf_draw_string_centered(final_score, panel_cx, 420, 18, HUD_TEXT_PRIMARY);
 
         vf_draw_string_centered("PRESS ENTER TO DRIFT AGAIN",
-                                panel_cx, 475, 16, UI_AMBER);
+                                panel_cx, 475, 16, HUD_AMBER);
 
     /* =========== STATE: NEW HIGH SCORE =========== */
     } else if (game_state == STATE_NEW_HIGHSCORE) {
         /* Panel */
-        ui_panel(g_renderer, 340, 280, 600, 340, UI_GOLD);
+        ui_panel(g_renderer, 340, 280, 600, 340, HUD_GOLD_BAR);
 
         float panel_cx = 340.0f + 600.0f / 2.0f;  /* 640 */
 
-        vf_draw_string_centered("NEW DRIFTER RECORD!", panel_cx, 310, 24, UI_GOLD);
+        vf_draw_string_centered("NEW DRIFTER RECORD!", panel_cx, 310, 24,
+                                HUD_TEXT_GOLD);
 
         char score_buf[32];
         sprintf(score_buf, "%d", score);
-        vf_draw_string_centered(score_buf, panel_cx, 350, 16, UI_WHITE);
+        vf_draw_string_centered(score_buf, panel_cx, 350, 16, HUD_TEXT_PRIMARY);
 
-        vf_draw_string_centered("INSCRIBE YOUR MARK:", panel_cx, 390, 18, UI_WHITE);
+        vf_draw_string_centered("INSCRIBE YOUR MARK:", panel_cx, 390, 18,
+                                HUD_TEXT_PRIMARY);
 
         char di[8];
         sprintf(di, "%c %c %c",
                 temp_initials[0], temp_initials[1], temp_initials[2]);
-        vf_draw_string_centered(di, panel_cx, 440, 28, UI_CYAN);
+        vf_draw_string_centered(di, panel_cx, 440, 28, HUD_TEXT_CYAN);
 
     /* =========== STATE: UPGRADE SELECT (RELIC CHOICE) =========== */
     } else if (game_state == STATE_UPGRADE_SELECT) {
@@ -5786,13 +6128,13 @@ static void render_menus(void)
 
         /* Pulsing header */
         float sz = 24.0f + 2.0f * sinf(upgrade_pulse * 3.0f);
+        SDL_Color surge_col = ui_pulse(HUD_GREEN, game_time, 2.0f, 0.3f);
         vf_draw_string_centered("CHRONICLE SURGE!",
-                                SCREEN_WIDTH / 2.0f, 80, sz, UI_GREEN);
+                                SCREEN_WIDTH / 2.0f, 80, sz, surge_col);
         vf_draw_string_centered("CHOOSE YOUR RELIC",
-                                SCREEN_WIDTH / 2.0f, 130, 14, UI_GREY);
-        SDL_Color dim_grey = {74, 74, 90, 160};
+                                SCREEN_WIDTH / 2.0f, 130, 14, HUD_TEXT_DIM);
         vf_draw_string_centered("WASD / ARROWS + ENTER",
-                                SCREEN_WIDTH / 2.0f, 155, 11, dim_grey);
+                                SCREEN_WIDTH / 2.0f, 155, 11, HUD_TEXT_DARK);
 
         /* 3 relic cards in a row:
          * Card w=340, h=180, spacing=20
@@ -5806,20 +6148,20 @@ static void render_menus(void)
         for (int i = 0; i < 3; i++) {
             int   is_sel     = (i == selected_option);
             float cx         = card_sx + i * (card_w + card_gap);
-            SDL_Color border = is_sel ? UI_GOLD : UI_STEEL;
+            SDL_Color border = is_sel ? HUD_BORDER_ACTIVE : HUD_PANEL_DEEP;
 
             ui_panel(g_renderer, cx, card_y, card_w, card_h, border);
 
             if (is_sel) {
                 ui_corner_brackets(g_renderer, cx, card_y, card_w, card_h,
-                                   UI_GOLD, 16.0f);
+                                   HUD_TEXT_GOLD, 16.0f);
             }
 
             float card_cx = cx + card_w / 2.0f;
             float name_sz = is_sel
                             ? (18.0f * (1.0f + 0.05f * sinf(upgrade_pulse * 5.0f + i)))
                             : 14.0f;
-            SDL_Color nc  = is_sel ? UI_GOLD : UI_GREY;
+            SDL_Color nc  = is_sel ? HUD_TEXT_GOLD : HUD_TEXT_DIM;
 
             vf_draw_string_centered(upgrade_names[upgrade_options[i]],
                                     card_cx, 250, name_sz, nc);
@@ -5832,11 +6174,10 @@ static void render_menus(void)
 
             /* Description */
             vf_draw_string_centered(upgrade_descs[upgrade_options[i]],
-                                    card_cx, 295, 10, UI_GREY);
+                                    card_cx, 295, 10, HUD_TEXT_DARK);
 
             if (is_sel) {
-                /* "PRESS ENTER" hint at card bottom */
-                SDL_Color dim_amber = {255, 140, 0, 140};
+                SDL_Color dim_amber = HUD_AMBER; dim_amber.a = 160;
                 vf_draw_string_centered("PRESS ENTER", card_cx, 355, 9, dim_amber);
             }
         }
