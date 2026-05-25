@@ -820,6 +820,19 @@ static void start_next_level(void);
 static void start_new_game(void);
 
 /* Settings */
+/** @brief Maps an SDL_BUTTON_* value to a short display label for the settings UI. */
+static const char *mouse_btn_label(int btn)
+{
+    switch (btn) {
+        case SDL_BUTTON_LEFT:   return "LMB";
+        case SDL_BUTTON_MIDDLE: return "MMB";
+        case SDL_BUTTON_RIGHT:  return "RMB";
+        case SDL_BUTTON_X1:     return "BTN4";
+        case SDL_BUTTON_X2:     return "BTN5";
+        default:                return "???";
+    }
+}
+
 static void settings_adjust(int dir);
 Settings settings_defaults(void);
 void     settings_save(const Settings *s);
@@ -1826,8 +1839,11 @@ Settings settings_defaults(void)
     s.audio.music_vol         = 70;
     s.audio.sfx_vol           = 80;
     s.audio.ui_vol            = 60;
-    s.controls.mouse_aim      = 1;
-    s.controls.mouse_sensitivity = 100;
+    s.controls.mouse_aim         = 1;
+    s.controls.mouse_sensitivity  = 100;
+    s.controls.mouse_fire_btn     = SDL_BUTTON_LEFT;   /* LMB → shoot     */
+    s.controls.mouse_thrust_btn   = SDL_BUTTON_RIGHT;  /* RMB → thrust    */
+    s.controls.mouse_hyper_btn    = SDL_BUTTON_MIDDLE; /* MMB → hyperspace */
     s.controls.autofire       = 0;
     s.hud.show_fps            = 0;
     s.hud.show_minimap        = 1;
@@ -1859,8 +1875,11 @@ void settings_save(const Settings *s)
     fprintf(f, "master_vol=%d\n",    s->audio.master_vol);
     fprintf(f, "music_vol=%d\n",     s->audio.music_vol);
     fprintf(f, "sfx_vol=%d\n",       s->audio.sfx_vol);
-    fprintf(f, "mouse_aim=%d\n",     s->controls.mouse_aim);
-    fprintf(f, "sensitivity=%d\n",   s->controls.mouse_sensitivity);
+    fprintf(f, "mouse_aim=%d\n",        s->controls.mouse_aim);
+    fprintf(f, "sensitivity=%d\n",      s->controls.mouse_sensitivity);
+    fprintf(f, "mouse_fire_btn=%d\n",   s->controls.mouse_fire_btn);
+    fprintf(f, "mouse_thrust_btn=%d\n", s->controls.mouse_thrust_btn);
+    fprintf(f, "mouse_hyper_btn=%d\n",  s->controls.mouse_hyper_btn);
     fprintf(f, "show_fps=%d\n",      s->hud.show_fps);
     fprintf(f, "show_minimap=%d\n",  s->hud.show_minimap);
     fprintf(f, "crosshair=%d\n",     (int)s->hud.crosshair);
@@ -1897,8 +1916,11 @@ void settings_load(Settings *s)
         else if (!strcmp(key, "master_vol"))    s->audio.master_vol        = atoi(val);
         else if (!strcmp(key, "music_vol"))     s->audio.music_vol         = atoi(val);
         else if (!strcmp(key, "sfx_vol"))       s->audio.sfx_vol           = atoi(val);
-        else if (!strcmp(key, "mouse_aim"))     s->controls.mouse_aim      = atoi(val);
-        else if (!strcmp(key, "sensitivity"))   s->controls.mouse_sensitivity = atoi(val);
+        else if (!strcmp(key, "mouse_aim"))        s->controls.mouse_aim            = atoi(val);
+        else if (!strcmp(key, "sensitivity"))      s->controls.mouse_sensitivity    = atoi(val);
+        else if (!strcmp(key, "mouse_fire_btn"))   s->controls.mouse_fire_btn       = atoi(val);
+        else if (!strcmp(key, "mouse_thrust_btn")) s->controls.mouse_thrust_btn     = atoi(val);
+        else if (!strcmp(key, "mouse_hyper_btn"))  s->controls.mouse_hyper_btn      = atoi(val);
         else if (!strcmp(key, "show_fps"))      s->hud.show_fps            = atoi(val);
         else if (!strcmp(key, "show_minimap"))  s->hud.show_minimap        = atoi(val);
         else if (!strcmp(key, "crosshair"))     s->hud.crosshair           = (CrosshairStyle)atoi(val);
@@ -2046,8 +2068,27 @@ static void settings_adjust(int dir)
         } else if (r == 5) {
             TOGGLE(g_settings.controls.invert_y);
             settings_invert_y = g_settings.controls.invert_y;
+        } else if (r == 6 || r == 7 || r == 8) {
+            /* Cycle mouse fire/thrust/hyper button through L/M/R.
+             * Each button must be unique; skip values already used by
+             * the other two bindings to prevent conflicts. */
+            static const int mouse_btn_cycle[] = {
+                SDL_BUTTON_LEFT, SDL_BUTTON_MIDDLE, SDL_BUTTON_RIGHT,
+                SDL_BUTTON_X1,   SDL_BUTTON_X2
+            };
+            const int cycle_len = (int)(sizeof(mouse_btn_cycle) / sizeof(mouse_btn_cycle[0]));
+            int *target = (r == 6) ? &g_settings.controls.mouse_fire_btn
+                        : (r == 7) ? &g_settings.controls.mouse_thrust_btn
+                                   : &g_settings.controls.mouse_hyper_btn;
+            /* Find current position in cycle table. */
+            int cur = 0;
+            for (int ci = 0; ci < cycle_len; ci++)
+                if (mouse_btn_cycle[ci] == *target) { cur = ci; break; }
+            /* Advance (direction comes from the caller via the sign on `dir`). */
+            cur = (cur + dir + cycle_len) % cycle_len;
+            *target = mouse_btn_cycle[cur];
         }
-        /* r == 6: KEYBINDS — handled in caller */
+        /* r == 9: KEYBINDS — handled in caller */
 
     } else if (settings_tab == 4) { /* HUD */
         if      (r == 0) {
@@ -2161,7 +2202,8 @@ static void handle_input_playing(SDL_Event *event)
             }
         }
     } else if (event->type == SDL_MOUSEBUTTONDOWN && player.active) {
-        if (event->button.button == SDL_BUTTON_MIDDLE) {
+        /* Use the user-configured hyperspace mouse button (default: middle). */
+        if (event->button.button == g_settings.controls.mouse_hyper_btn) {
             trigger_hyperspace();
         }
     } else if (event->type == SDL_CONTROLLERBUTTONDOWN) {
@@ -2247,7 +2289,7 @@ static void handle_input_menus(SDL_Event *event)
             }
         } else if (game_state == STATE_SETTINGS) {
             /* Max row index per tab (0-based, inclusive) */
-            const int tab_maxrow[] = {2, 5, 4, 6, 5, 3, 1, 5, 2};
+            const int tab_maxrow[] = {2, 5, 4, 9, 5, 3, 1, 5, 2};
             const int tab_count_s  = 9;
             int max_sel = tab_maxrow[settings_tab];
 
@@ -2272,7 +2314,7 @@ static void handle_input_menus(SDL_Event *event)
             if (sym == SDLK_RIGHT || sym == SDLK_d) settings_adjust(1);
             if (sym == SDLK_RETURN || sym == SDLK_SPACE) {
                 /* CONTROLS tab, KEYBINDS row */
-                if (settings_tab == 3 && settings_row == 6) {
+                if (settings_tab == 3 && settings_row == 9) {
                     game_state            = STATE_KEYBINDS;
                     keybind_selection     = 0;
                     keybind_page          = 0;
@@ -2401,7 +2443,7 @@ static void handle_input_menus(SDL_Event *event)
                 settings_tab        = 0;
             }
         } else if (game_state == STATE_SETTINGS) {
-            const int tab_maxrow_c[] = {2, 5, 4, 6, 5, 3, 1, 5, 2};
+            const int tab_maxrow_c[] = {2, 5, 4, 9, 5, 3, 1, 5, 2};
             const int tab_count_c    = 9;
             int max_sel = tab_maxrow_c[settings_tab];
 
@@ -2416,7 +2458,7 @@ static void handle_input_menus(SDL_Event *event)
             if (btn == SDL_CONTROLLER_BUTTON_DPAD_LEFT)  settings_adjust(-1);
             if (btn == SDL_CONTROLLER_BUTTON_DPAD_RIGHT) settings_adjust(1);
             if (btn == SDL_CONTROLLER_BUTTON_A) {
-                if (settings_tab == 3 && settings_row == 6) {
+                if (settings_tab == 3 && settings_row == 9) {
                     game_state            = STATE_KEYBINDS;
                     keybind_selection     = 0;
                     keybind_page          = 0;
@@ -2824,11 +2866,11 @@ static void update_player_physics(float dt)
                     player.angle += ROTATION_SPEED * dt;
                 if (keys[keybinds[KB_THRUST]] || keys[SDL_SCANCODE_W]
                     || (settings_mouse_aim
-                        && (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT))))
+                        && (mouse_buttons & SDL_BUTTON(g_settings.controls.mouse_thrust_btn))))
                     thrust_key_down = 1;
                 if (keys[keybinds[KB_FIRE]] || keys[SDL_SCANCODE_SPACE]
                     || (settings_mouse_aim
-                        && (mouse_buttons & SDL_BUTTON(SDL_BUTTON_RIGHT))))
+                        && (mouse_buttons & SDL_BUTTON(g_settings.controls.mouse_fire_btn))))
                     fire_key_down = 1;
 
                 if (settings_mouse_aim) {
@@ -2872,9 +2914,9 @@ static void update_player_physics(float dt)
                         mouse_dy = dy;
                         mouse_aim_active = 1;
                     }
-                    if (mouse_buttons & SDL_BUTTON(SDL_BUTTON_LEFT))
+                    if (mouse_buttons & SDL_BUTTON(g_settings.controls.mouse_thrust_btn))
                         thrust_key_down = 1;
-                    if (mouse_buttons & SDL_BUTTON(SDL_BUTTON_RIGHT))
+                    if (mouse_buttons & SDL_BUTTON(g_settings.controls.mouse_fire_btn))
                         fire_key_down = 1;
                 }
 
@@ -5892,6 +5934,12 @@ static void render_menus(void)
                 dz_names[g_settings.controls.ctrl_deadzone]);
             DRAW_SETTINGS_ROW(r++, "INVERT Y",
                 on_off[g_settings.controls.invert_y]);
+            DRAW_SETTINGS_ROW(r++, "MOUSE FIRE BTN",
+                mouse_btn_label(g_settings.controls.mouse_fire_btn));
+            DRAW_SETTINGS_ROW(r++, "MOUSE THRUST BTN",
+                mouse_btn_label(g_settings.controls.mouse_thrust_btn));
+            DRAW_SETTINGS_ROW(r++, "MOUSE HYPER BTN",
+                mouse_btn_label(g_settings.controls.mouse_hyper_btn));
             DRAW_SETTINGS_ROW(r++, "KEYBINDS", ">");
             if (g_controller)
                 vf_draw_string_centered("CONTROLLER CONNECTED",

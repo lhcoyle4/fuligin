@@ -80,6 +80,11 @@ typedef struct {
     int   aim_assist;
     int   ctrl_deadzone;
     int   invert_y;
+    /* Mouse button bindings: stores SDL_BUTTON_* values (1=Left, 2=Mid, 3=Right).
+     * Defaults: fire=Left, thrust=Right, hyperspace=Middle. */
+    int   mouse_fire_btn;
+    int   mouse_thrust_btn;
+    int   mouse_hyper_btn;
 } ControlsSettings;
 
 typedef struct {
