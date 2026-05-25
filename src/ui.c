@@ -748,3 +748,15 @@ void ui_corner_brackets(SDL_Renderer *r, float x, float y, float w, float h,
     SDL_RenderDrawLineF(r, x1, y1 - s, x1, y1);
     SDL_RenderDrawLineF(r, x1 - s, y1, x1, y1);
 }
+
+/**
+ * @brief Draw a radar blip (small rectangle) for the minimap.
+ *        See ui.h for full documentation.
+ */
+void ui_minimap_blip(SDL_Renderer *r, float x, float y, SDL_Color color, float size)
+{
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    SDL_SetRenderDrawColor(r, color.r, color.g, color.b, color.a);
+    SDL_FRect dot = { x - size * 0.5f, y - size * 0.5f, size, size };
+    SDL_RenderFillRectF(r, &dot);
+}

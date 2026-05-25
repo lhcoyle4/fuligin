@@ -368,3 +368,13 @@ void ui_corner_brackets(SDL_Renderer *r, float x, float y, float w, float h,
                          SDL_Color color, float size);
 
 #endif /* UI_H */
+
+/**
+ * @brief Draw a radar blip (small rectangle) for the minimap.
+ *
+ * @param r      SDL renderer
+ * @param x,y    Center of the blip
+ * @param color  Blip color
+ * @param size   Width and height of the blip
+ */
+void ui_minimap_blip(SDL_Renderer *r, float x, float y, SDL_Color color, float size);
