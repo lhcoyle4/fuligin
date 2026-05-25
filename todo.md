@@ -78,7 +78,8 @@ Adapt Rogue's classic monster behaviors to space entities:
 - [ ] **Engine Particulate Drift:** Make the player's engine exhaust interact with floating cosmic dust. Moving at high speeds sucks in ambient particles, creating a brilliant glowing vector dust-trail proportional to ship velocity.
 
 ### 2. "Cugel-9" Sarcastic Board Computer (Lore/Silly)
-- [ ] **Melancholic Text Logs:** A text-only virtual intelligence terminal named `CUGEL-9` that prints status reports on the HUD.
+- [ ] **Melancholic Text & Speech Logs:** A virtual intelligence terminal named `CUGEL-9` that prints status reports on the HUD and uses text-to-speech to speak them out loud.
+  - [ ] Speech must utilize a sad, depressed robot voice (inspired by Marvin from *Hitchhiker's Guide to the Galaxy*).
   - [ ] E.g., when taking collision damage: `"STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE."`
   - [ ] E.g., when missing several shots in a row: `"DISCHARGING BULLETS DIRECTLY INTO VACUUM. ASTEROIDS ARE UNIMPRESSED."`
 
