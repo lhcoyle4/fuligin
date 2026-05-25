@@ -1,19 +1,32 @@
 # Active Agent Workspace Locks
 
+**Protocol:** Every agent MUST update this file when starting or finishing a task.
+All lock changes must be committed immediately. No agent may edit a locked file
+without first acquiring the lock in this document. See COWORKING_PROTOCOL.md.
+
+---
+
 ## Antigravity (Gemini)
-*   **Current Branch:** `agent/gemini`
-*   **Active Task:** Idle — Phase 3 feature branches merged (music-tempo, radar-blips, combo-ui)
+*   **Current Branch:** `main`
+*   **Active Task:** Idle — all branches merged, awaiting next task assignment
+*   **Locked Files/Paths:**
+    *   None
+
+## Linux Desktop
+*   **Current Branch:** `main`
+*   **Active Task:** Idle — all branches merged, awaiting next task assignment
 *   **Locked Files/Paths:**
     *   None
 
 ## Claude
-*   **Current Branch:** `agent/claude`
-*   **Active Task:** Phase 3 — Makefile rename + ai.c source inclusion + settings persistence QA
+*   **Current Branch:** `main`
+*   **Active Task:** Idle — all branches merged, awaiting human instruction for next feature
 *   **Locked Files/Paths:**
-    *   `Makefile` — rename TARGET fuligin.exe → launch_fuligin.exe; add src/ai.c to SRC
-    *   `FULIGIN_SETTINGS_SPEC.md` — settings system documentation update
-    *   `src/ui.c` — Phase 3 UI polish (scanline density, vignette tuning, bar gap fixes)
-    *   `include/ui.h` — any Phase 3 ui primitive additions
+    *   None
+
+---
+
+## Completed Work Log
 
 ### Claude — Phase 2 COMPLETE (commit 183b5a5, 2026-05-25)
 
@@ -27,17 +40,19 @@ Phase 2: Noctis HUD overhaul + comprehensive settings system
   9-tab settings menu; settings_save/load (fuligin.cfg)
 - `STYLE_GUIDE.md`: HUD_* palette + typography + settings UI style rules
 - `FULIGIN_SETTINGS_SPEC.md`: full design spec
-Pushed to: lhcoyle4/fuligin (agent/claude) + lhcoyle4/asteroids_vectrex (agent/claude)
+Merged to: main (2026-05-25 merge commit)
 
-### Claude — Phase 3 Plan
+### Claude — Phase 3 COMPLETE (commit 0eecfae, 2026-05-25)
 
-1. Commit Makefile rename (launch_fuligin.exe) + src/ai.c inclusion — in progress
-2. UI polish pass: ui.c scanline/vignette/bar tuning
-3. Verify settings_save/load against fuligin.cfg on live game
-4. Once Gemini releases game.c: wire WorldGenParams seed into game_init(),
-   add SDL_SetWindowFullscreen for fullscreen toggle
-5. Visual QA: launch game, screenshot HUD panels and settings menu
-6. PR agent/claude → antigravity (human action)
+Phase 3: Makefile rename + ai.c source inclusion
+- Makefile: TARGET renamed fuligin.exe → launch_fuligin.exe
+- src/ai.c added to SRC list
+- `include/world_builder.h` + `src/world_builder.c`: procedural generation scaffold
+Merged to: main (2026-05-25 merge commit)
 
-**Do NOT edit `Makefile`, `src/ui.c`, `include/ui.h`, or `FULIGIN_SETTINGS_SPEC.md`
-until Claude pushes the Phase 3 completion commit.**
+### Gemini — todo.md COMPLETE (commit 63cf586, 2026-05-25)
+
+- Added `todo.md`: full FULIGIN + Rogue-inspired roadmap
+- 14 custom spaceship features documented
+- Sad robot TTS requirement added to Cugel-9
+Merged to: main via PR #1 (2026-05-25 merge commit)
