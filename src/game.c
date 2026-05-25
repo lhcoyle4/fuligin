@@ -32,6 +32,8 @@ extern SDL_Window *g_window;
 
 #define MAX_MINES 8
 #define MAX_POWERUPS 4
+#define MAX_NPC 4
+#define MAX_STRUCTURE 6
 
 typedef enum {
     DIFFICULTY_EASY,
@@ -144,6 +146,26 @@ typedef struct {
     float trail_ang[PHOS_TRAIL_LEN];
     int trail_head;
 } UfoEntity;
+
+typedef struct {
+    int active;
+    int type;        /* 0=home_station */
+    Vec2 pos;
+    float angle;
+    float rot_speed;
+    float radius;
+} StructureEntity;
+
+typedef struct {
+    int active;
+    int following;       /* 0=idle, 1=following player */
+    Vec2 pos;
+    Vec2 vel;
+    float angle;
+    float radius;
+    float orbit_angle;   /* current orbit angle around player */
+    float contact_timer; /* time player has been close */
+} NpcEntity;
 
 typedef struct {
     int active;
@@ -274,6 +296,12 @@ static PowerupEntity powerups[MAX_POWERUPS];
 static RiftEntity rift;
 static RiftEntity player_rift;
 static ShockwaveEntity shockwaves[4];
+static StructureEntity structures[MAX_STRUCTURE];
+static NpcEntity npcs[MAX_NPC];
+static int   minimap_visible  = 1;
+static int   player_zone      = 0;
+static float player_dist_origin = 0.0f;
+static float home_station_angle = 0.0f;
 static UpgradeType upgrade_options[3];
 static int selected_option = 0;
 static float screen_shake_timer = 0.0f;
@@ -310,17 +338,20 @@ typedef enum {
     KB_ROTATE_LEFT=0, KB_ROTATE_RIGHT, KB_THRUST, KB_FIRE,
     KB_PAUSE, KB_HYPERSPACE,
     KB_ABILITY1, KB_ABILITY2, KB_ABILITY3, KB_ABILITY4,
+    KB_MINIMAP,
     KB_COUNT
 } KeyAction;
 static SDL_Scancode keybinds[KB_COUNT] = {
     SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_UP, SDL_SCANCODE_SPACE,
     SDL_SCANCODE_ESCAPE, SDL_SCANCODE_RETURN,
-    SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4
+    SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4,
+    SDL_SCANCODE_TAB
 };
 static const char* kb_action_names[KB_COUNT] = {
     "ROTATE LEFT", "ROTATE RIGHT", "THRUST", "FIRE",
     "PAUSE", "HYPERSPACE",
-    "ABILITY 1", "ABILITY 2", "ABILITY 3", "ABILITY 4"
+    "ABILITY 1", "ABILITY 2", "ABILITY 3", "ABILITY 4",
+    "MINIMAP"
 };
 static int rebinding_action = -1; // -1 = not rebinding
 static int keybind_selection = 0;
@@ -467,6 +498,71 @@ static Line bomber_lines[] = {
     {{-12.0f, -6.0f}, {-6.0f, -12.0f}},
     {{-6.0f, -12.0f}, {6.0f, -12.0f}},
     {{6.0f, -12.0f}, {12.0f, -6.0f}}
+};
+
+/* Home space station (octagon + cross + inner box) */
+static Line home_station_lines[] = {
+    {{-22.0f,-52.0f},{22.0f,-52.0f}},
+    {{22.0f,-52.0f},{52.0f,-22.0f}},
+    {{52.0f,-22.0f},{52.0f,22.0f}},
+    {{52.0f,22.0f},{22.0f,52.0f}},
+    {{22.0f,52.0f},{-22.0f,52.0f}},
+    {{-22.0f,52.0f},{-52.0f,22.0f}},
+    {{-52.0f,22.0f},{-52.0f,-22.0f}},
+    {{-52.0f,-22.0f},{-22.0f,-52.0f}},
+    {{-52.0f,0.0f},{-24.0f,0.0f}},
+    {{52.0f,0.0f},{24.0f,0.0f}},
+    {{0.0f,-52.0f},{0.0f,-24.0f}},
+    {{0.0f,52.0f},{0.0f,24.0f}},
+    {{-12.0f,-12.0f},{12.0f,-12.0f}},
+    {{12.0f,-12.0f},{12.0f,12.0f}},
+    {{12.0f,12.0f},{-12.0f,12.0f}},
+    {{-12.0f,12.0f},{-12.0f,-12.0f}}
+};
+
+/* Eldritch Tendril (Zone 2+ enemy) — asymmetric tentacle shape */
+static Line eldritch_lines[] = {
+    {{0.0f,-16.0f},{10.0f,-6.0f}},
+    {{10.0f,-6.0f},{16.0f,4.0f}},
+    {{16.0f,4.0f},{8.0f,16.0f}},
+    {{0.0f,-16.0f},{-10.0f,-6.0f}},
+    {{-10.0f,-6.0f},{-16.0f,4.0f}},
+    {{-16.0f,4.0f},{-8.0f,16.0f}},
+    {{8.0f,16.0f},{0.0f,10.0f}},
+    {{-8.0f,16.0f},{0.0f,10.0f}},
+    {{0.0f,-16.0f},{0.0f,-8.0f}},
+    {{-4.0f,0.0f},{4.0f,0.0f}}
+};
+
+/* Daemon Sigil (Zone 3+ enemy) — angular chaos symbol */
+static Line daemon_lines[] = {
+    {{0.0f,-20.0f},{12.0f,-8.0f}},
+    {{12.0f,-8.0f},{20.0f,0.0f}},
+    {{20.0f,0.0f},{12.0f,12.0f}},
+    {{12.0f,12.0f},{0.0f,20.0f}},
+    {{0.0f,20.0f},{-12.0f,12.0f}},
+    {{-12.0f,12.0f},{-20.0f,0.0f}},
+    {{-20.0f,0.0f},{-12.0f,-8.0f}},
+    {{-12.0f,-8.0f},{0.0f,-20.0f}},
+    {{-8.0f,-8.0f},{8.0f,-8.0f}},
+    {{8.0f,-8.0f},{8.0f,8.0f}},
+    {{8.0f,8.0f},{-8.0f,8.0f}},
+    {{-8.0f,8.0f},{-8.0f,-8.0f}},
+    {{0.0f,-12.0f},{0.0f,12.0f}},
+    {{-12.0f,0.0f},{12.0f,0.0f}},
+    {{-6.0f,-6.0f},{6.0f,6.0f}},
+    {{6.0f,-6.0f},{-6.0f,6.0f}}
+};
+
+/* Friendly NPC shield drone — small diamond with orbit ring hint */
+static Line npc_drone_lines[] = {
+    {{0.0f,-10.0f},{10.0f,0.0f}},
+    {{10.0f,0.0f},{0.0f,10.0f}},
+    {{0.0f,10.0f},{-10.0f,0.0f}},
+    {{-10.0f,0.0f},{0.0f,-10.0f}},
+    {{-5.0f,-5.0f},{5.0f,-5.0f}},
+    {{5.0f,-5.0f},{5.0f,5.0f}},
+    {{5.0f,5.0f},{-5.0f,5.0f}}
 };
 
 // Helpers
@@ -747,22 +843,70 @@ static void reset_player() {
     player.invuln_timer = 2.0f; /* 2 seconds invulnerability */
 }
 
+/* Zone 0=Home(<1000) Zone1=Belt(<3500) Zone2=Void(<8000) Zone3=Abyss */
+static int get_zone(Vec2 pos) {
+    float d = sqrtf(pos.x * pos.x + pos.y * pos.y);
+    if (d < 1000.0f) return 0;
+    if (d < 3500.0f) return 1;
+    if (d < 8000.0f) return 2;
+    return 3;
+}
+
+/* Spawn a friendly shield-drone NPC at a given world position */
+static void spawn_npc(Vec2 pos) {
+    for (int i = 0; i < MAX_NPC; i++) {
+        if (!npcs[i].active) {
+            npcs[i].active = 1;
+            npcs[i].following = 0;
+            npcs[i].pos = pos;
+            npcs[i].vel = (Vec2){0.0f, 0.0f};
+            npcs[i].angle = 0.0f;
+            npcs[i].radius = 10.0f;
+            npcs[i].orbit_angle = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+            npcs[i].contact_timer = 0.0f;
+            return;
+        }
+    }
+}
+
+/* Init home station + zone NPCs */
+static void init_home_area() {
+    /* Home station structure at world origin */
+    structures[0].active = 1;
+    structures[0].type   = 0;
+    structures[0].pos    = (Vec2){0.0f, 0.0f};
+    structures[0].radius = 55.0f;
+    structures[0].rot_speed = 0.004f;
+    structures[0].angle  = 0.0f;
+    /* Spawn a couple of friendly drones near home */
+    Vec2 d1 = { 200.0f + ((float)rand()/RAND_MAX)*100.0f,  80.0f};
+    Vec2 d2 = {-180.0f - ((float)rand()/RAND_MAX)*100.0f, -90.0f};
+    spawn_npc(d1);
+    spawn_npc(d2);
+}
+
 static void spawn_ufo() {
     ufo.active = 1;
     
-    // Choose type based on level
+    /* Zone + level based enemy type selection */
     int r = rand() % 100;
-    if (level >= 4 && r < 20) {
-        ufo.size = 5; // Eye of the Void
+    if (player_zone >= 3 && r < 15) {
+        ufo.size = 7;  /* Daemon Sigil (Zone 3+) */
+        ufo.radius = 22.0f;
+    } else if (player_zone >= 2 && r < 30) {
+        ufo.size = 6;  /* Eldritch Tendril (Zone 2+) */
+        ufo.radius = 18.0f;
+    } else if (level >= 4 && r < 45) {
+        ufo.size = 5;  /* Eye of the Void */
         ufo.radius = 24.0f;
-    } else if (level >= 3 && r < 40) {
-        ufo.size = 4; // Bomber
+    } else if (level >= 3 && r < 60) {
+        ufo.size = 4;  /* Bomber */
         ufo.radius = 20.0f;
-    } else if (level >= 2 && r < 60) {
-        ufo.size = 3; // Kamikaze
+    } else if (level >= 2 && r < 75) {
+        ufo.size = 3;  /* Kamikaze */
         ufo.radius = 12.0f;
     } else {
-        ufo.size = (rand() % 100 < 40 + level * 5) ? 1 : 2; // 2 = Large, 1 = Small
+        ufo.size = (rand() % 100 < 40 + level * 5) ? 1 : 2;
         ufo.radius = (ufo.size == 2) ? 16.0f : 8.0f;
     }
     
@@ -775,11 +919,15 @@ static void spawn_ufo() {
         ufo.vel.x = -(100.0f + 25.0f * level);
     }
     
-    // Speed adjustments
+    /* Speed adjustments per type */
     if (ufo.size == 3) {
-        ufo.vel.x *= 1.4f; // Kamikaze is fast
+        ufo.vel.x *= 1.4f;
     } else if (ufo.size == 4) {
-        ufo.vel.x *= 0.6f; // Bomber is heavy and slow
+        ufo.vel.x *= 0.6f;
+    } else if (ufo.size == 6) {
+        ufo.vel.x *= 0.5f; /* Tendril drifts slow */
+    } else if (ufo.size == 7) {
+        ufo.vel.x *= 0.7f; /* Daemon moderate speed */
     }
     
     ufo.pos.y = 80.0f + ((float)rand() / RAND_MAX) * (SCREEN_HEIGHT - 160.0f);
@@ -806,12 +954,16 @@ static void spawn_ufo() {
             ufo.lines[i] = bomber_lines[i];
         }
     } else if (ufo.size == 5) {
-        ufo.line_count = 0; // custom procedural rendering
+        ufo.line_count = 0; /* custom procedural rendering */
+    } else if (ufo.size == 6) {
+        ufo.line_count = sizeof(eldritch_lines) / sizeof(Line);
+        for (int i = 0; i < ufo.line_count; i++) ufo.lines[i] = eldritch_lines[i];
+    } else if (ufo.size == 7) {
+        ufo.line_count = sizeof(daemon_lines) / sizeof(Line);
+        for (int i = 0; i < ufo.line_count; i++) ufo.lines[i] = daemon_lines[i];
     } else {
         ufo.line_count = sizeof(ufo_lines) / sizeof(Line);
-        for (int i = 0; i < ufo.line_count; i++) {
-            ufo.lines[i] = ufo_lines[i];
-        }
+        for (int i = 0; i < ufo.line_count; i++) ufo.lines[i] = ufo_lines[i];
     }
     
     audio_play(SFX_UFO_LOOP);
@@ -976,6 +1128,10 @@ static void start_new_game() {
     wave_asteroids_destroyed = 0;
     wave_cleared_pending = 0;
     camera_pos = (Vec2){0.0f, 0.0f};
+    /* Init zone structures and NPCs */
+    for (int i = 0; i < MAX_STRUCTURE; i++) structures[i].active = 0;
+    for (int i = 0; i < MAX_NPC; i++) npcs[i].active = 0;
+    init_home_area();
 
     // Reset player upgrades
     player_upgrades.triple_shot = 0;
@@ -1141,6 +1297,8 @@ void game_handle_input(SDL_Event *event) {
         } else if (game_state == STATE_PLAYING) {
             if (event->key.keysym.sym == SDLK_ESCAPE) {
                 game_set_paused(1);
+            } else if (event->key.keysym.scancode == keybinds[KB_MINIMAP]) {
+                minimap_visible = !minimap_visible;
             } else if ((event->key.keysym.sym == SDLK_RETURN || event->key.keysym.sym == SDLK_DOWN) && player.active) {
                 trigger_hyperspace();
             }
@@ -1986,6 +2144,45 @@ void game_update(float delta_time) {
                 audio_stop(SFX_UFO_LOOP);
                 ufo_spawn_timer = 20.0f + ((float)rand() / RAND_MAX) * 15.0f;
             }
+        } else if (ufo.size == 6) {
+            /* Eldritch Tendril: sinusoidal drift, approaches slowly */
+            if (player.active) {
+                float dx = player.pos.x - ufo.pos.x;
+                float dy = player.pos.y - ufo.pos.y;
+                float d  = sqrtf(dx*dx + dy*dy);
+                if (d > 0.1f) { ufo.vel.x += (dx/d)*30.0f*delta_time; ufo.vel.y += (dy/d)*30.0f*delta_time; }
+            }
+            float t6 = SDL_GetTicks() / 800.0f;
+            ufo.vel.x += cosf(t6 * 1.3f) * 40.0f * delta_time;
+            ufo.vel.y += sinf(t6 * 0.9f) * 40.0f * delta_time;
+            float spd6 = sqrtf(ufo.vel.x*ufo.vel.x + ufo.vel.y*ufo.vel.y);
+            if (spd6 > 120.0f) { ufo.vel.x = ufo.vel.x/spd6*120.0f; ufo.vel.y = ufo.vel.y/spd6*120.0f; }
+            ufo.pos.x += ufo.vel.x * delta_time;
+            ufo.pos.y += ufo.vel.y * delta_time;
+            ufo.angle = atan2f(ufo.vel.y, ufo.vel.x);
+            if (!player.active || sqrtf((ufo.pos.x-player.pos.x)*(ufo.pos.x-player.pos.x)+(ufo.pos.y-player.pos.y)*(ufo.pos.y-player.pos.y)) > 1400.0f) {
+                ufo.active = 0; audio_stop(SFX_UFO_LOOP);
+                ufo_spawn_timer = 18.0f + ((float)rand()/RAND_MAX)*12.0f;
+            }
+        } else if (ufo.size == 7) {
+            /* Daemon Sigil: erratic teleport-lurches + fast spin */
+            ufo.angle += 3.0f * delta_time;
+            ufo.change_dir_timer -= delta_time;
+            if (ufo.change_dir_timer <= 0.0f) {
+                ufo.change_dir_timer = 0.8f + ((float)rand()/RAND_MAX)*1.2f;
+                float a7 = ((float)rand()/RAND_MAX) * 2.0f * (float)M_PI;
+                float lurch = 80.0f + ((float)rand()/RAND_MAX)*80.0f;
+                ufo.pos.x += cosf(a7)*lurch; ufo.pos.y += sinf(a7)*lurch;
+                ufo.vel.x = cosf(a7)*160.0f; ufo.vel.y = sinf(a7)*160.0f;
+            }
+            ufo.pos.x += ufo.vel.x * delta_time;
+            ufo.pos.y += ufo.vel.y * delta_time;
+            ufo.vel.x *= (1.0f - 1.5f*delta_time);
+            ufo.vel.y *= (1.0f - 1.5f*delta_time);
+            if (!player.active || sqrtf((ufo.pos.x-player.pos.x)*(ufo.pos.x-player.pos.x)+(ufo.pos.y-player.pos.y)*(ufo.pos.y-player.pos.y)) > 1400.0f) {
+                ufo.active = 0; audio_stop(SFX_UFO_LOOP);
+                ufo_spawn_timer = 18.0f + ((float)rand()/RAND_MAX)*12.0f;
+            }
         } else {
             // Normal UFO (1 or 2)
             ufo.pos.x += ufo.vel.x * delta_time;
@@ -2018,7 +2215,10 @@ void game_update(float delta_time) {
         if (ufo.active) {
             ufo.fire_timer -= delta_time;
             if (ufo.fire_timer <= 0.0f && player.active) {
-                ufo.fire_timer = (ufo.size == 2) ? 1.5f : 1.0f; // Small UFO fires faster
+                /* Fire rate varies by type */
+                if      (ufo.size == 6) ufo.fire_timer = 2.2f;
+                else if (ufo.size == 7) ufo.fire_timer = 0.7f;
+                else ufo.fire_timer = (ufo.size == 2) ? 1.5f : 1.0f;
                 
                 // Look for empty UFO bullet slot
                 for (int i = 0; i < MAX_UFO_BULLETS; i++) {
@@ -2061,6 +2261,80 @@ void game_update(float delta_time) {
         }
     }
 
+
+    /* ─── Update zone, structures, NPCs ─────────────────────────── */
+    if (player.active) {
+        player_dist_origin = sqrtf(player.pos.x*player.pos.x + player.pos.y*player.pos.y);
+        player_zone = get_zone(player.pos);
+    }
+
+    /* Rotate home station */
+    home_station_angle += 0.004f * delta_time * 60.0f;
+
+    /* Update structures (indestructible home station for now) */
+    (void)structures;
+
+    /* Update friendly NPCs */
+    for (int i = 0; i < MAX_NPC; i++) {
+        if (!npcs[i].active) continue;
+        float dx = player.pos.x - npcs[i].pos.x;
+        float dy = player.pos.y - npcs[i].pos.y;
+        float dist = sqrtf(dx*dx + dy*dy);
+
+        if (!npcs[i].following) {
+            /* Idle drift: gentle circles */
+            npcs[i].orbit_angle += 0.4f * delta_time;
+            npcs[i].vel.x += cosf(npcs[i].orbit_angle) * 20.0f * delta_time;
+            npcs[i].vel.y += sinf(npcs[i].orbit_angle) * 20.0f * delta_time;
+            /* Dampen */
+            npcs[i].vel.x *= (1.0f - 2.0f * delta_time);
+            npcs[i].vel.y *= (1.0f - 2.0f * delta_time);
+            npcs[i].pos.x += npcs[i].vel.x * delta_time;
+            npcs[i].pos.y += npcs[i].vel.y * delta_time;
+            /* Check if player nearby */
+            if (dist < 120.0f && player.active) {
+                npcs[i].contact_timer += delta_time;
+                if (npcs[i].contact_timer > 2.0f) {
+                    npcs[i].following = 1;
+                    npcs[i].orbit_angle = atan2f(dy, dx) + (float)M_PI;
+                }
+            } else {
+                npcs[i].contact_timer *= 0.95f;
+            }
+        } else {
+            /* Orbit player at ~85px */
+            float target_dist = 85.0f;
+            npcs[i].orbit_angle += 1.1f * delta_time;
+            float tx = player.pos.x + cosf(npcs[i].orbit_angle) * target_dist;
+            float ty = player.pos.y + sinf(npcs[i].orbit_angle) * target_dist;
+            float ex = tx - npcs[i].pos.x;
+            float ey = ty - npcs[i].pos.y;
+            npcs[i].vel.x += ex * 8.0f * delta_time;
+            npcs[i].vel.y += ey * 8.0f * delta_time;
+            npcs[i].vel.x *= (1.0f - 3.0f * delta_time);
+            npcs[i].vel.y *= (1.0f - 3.0f * delta_time);
+            npcs[i].pos.x += npcs[i].vel.x * delta_time;
+            npcs[i].pos.y += npcs[i].vel.y * delta_time;
+            /* Lose following if player dies or gets very far */
+            if (!player.active || dist > 400.0f)
+                npcs[i].following = 0;
+        }
+        npcs[i].angle = atan2f(npcs[i].vel.y, npcs[i].vel.x);
+
+        /* Check bullet collision */
+        for (int b = 0; b < MAX_BULLETS; b++) {
+            if (!bullets[b].active) continue;
+            float bx = bullets[b].pos.x - npcs[i].pos.x;
+            float by = bullets[b].pos.y - npcs[i].pos.y;
+            if (sqrtf(bx*bx + by*by) < npcs[i].radius) {
+                bullets[b].active = 0;
+                npcs[i].active = 0; /* NPC dies if shot */
+                spawn_particles(npcs[i].pos, 12, (SDL_Color){80,255,80,255});
+                audio_play(SFX_EXPLOSION_SM);
+                break;
+            }
+        }
+    }
     // --- Update UFO Bullets ---
     for (int i = 0; i < MAX_UFO_BULLETS; i++) {
         if (ufo_bullets[i].active) {
@@ -2530,6 +2804,8 @@ void game_render() {
             case 3:  scale = 1.0f; draw_angle = ufo.angle; break; /* Kamikaze, rotates  */
             case 4:  scale = 0.9f; break;                         /* Bomber ~36px       */
             case 5:  scale = 1.5f; break;                         /* Eye of Void ~48px  */
+            case 6:  scale = 1.1f; draw_angle = ufo.angle; break; /* Eldritch Tendril   */
+            case 7:  scale = 1.2f; draw_angle = ufo.angle; break; /* Daemon Sigil       */
             default: scale = 1.0f; break;
         }
         vg_draw_shape_trail(&s, ufo.trail_pos, ufo.trail_ang, PHOS_TRAIL_LEN, ufo.trail_head, scale, 0.4f, 0.75f);
@@ -2631,6 +2907,22 @@ void game_render() {
         }
     }
 
+
+    /* ─── Draw Home Station (world-space) ─────────────────────── */
+    {
+        Shape hs = {home_station_lines, sizeof(home_station_lines)/sizeof(Line),
+                    (SDL_Color){80,220,255,220}};
+        vg_draw_shape(&hs, (Vec2){0.0f,0.0f}, home_station_angle, 1.0f);
+    }
+
+    /* ─── Draw NPCs (world-space) ──────────────────────────────── */
+    for (int i = 0; i < MAX_NPC; i++) {
+        if (!npcs[i].active) continue;
+        SDL_Color nc = npcs[i].following ? (SDL_Color){80,255,120,255} : (SDL_Color){60,200,80,200};
+        Shape ns = {npc_drone_lines, sizeof(npc_drone_lines)/sizeof(Line), nc};
+        vg_draw_shape(&ns, npcs[i].pos, npcs[i].angle, 0.9f);
+    }
+
     // Reset camera offset to zero for HUD/UI rendering
     vg_set_camera((Vec2){0.0f, 0.0f});
 
@@ -2714,6 +3006,128 @@ void game_render() {
     }
 
     // Edge flash: draw bright border lines at screen edges when player is about to wrap
+
+    /* ─── MINIMAP ──────────────────────────────────────────────── */
+    if (minimap_visible && (game_state == STATE_PLAYING || game_state == STATE_PAUSED)) {
+        float mmx = (float)SCREEN_WIDTH - 205.0f, mmy = 68.0f;
+        float mmw = 185.0f, mmh = 148.0f;
+        float range = 3500.0f;
+        float scx = mmw / (range * 2.0f), scy = mmh / (range * 2.0f);
+        float mcx = mmx + mmw * 0.5f, mcy = mmy + mmh * 0.5f;
+
+        /* Background scanlines */
+        for (int row = 0; row <= 6; row++) {
+            float ly = mmy + row * (mmh / 6.0f);
+            Line l = {{mmx, ly}, {mmx + mmw, ly}};
+            Shape s = {&l, 1, (SDL_Color){0, 30, 50, 160}};
+            vg_draw_shape(&s, (Vec2){0,0}, 0.0f, 1.0f);
+        }
+        /* Border */
+        {
+            Line border[4] = {
+                {{mmx,mmy},{mmx+mmw,mmy}},{{mmx+mmw,mmy},{mmx+mmw,mmy+mmh}},
+                {{mmx+mmw,mmy+mmh},{mmx,mmy+mmh}},{{mmx,mmy+mmh},{mmx,mmy}}
+            };
+            SDL_Color zone_bdr[] = {
+                {80,255,255,200},{120,200,255,200},{180,80,255,200},{255,80,80,200}
+            };
+            for (int i = 0; i < 4; i++) {
+                Shape s = {&border[i], 1, zone_bdr[player_zone]};
+                vg_draw_shape(&s, (Vec2){0,0}, 0.0f, 1.0f);
+            }
+        }
+        /* Home station (cyan cross) */
+        {
+            float hx = mcx + (0.0f - player.pos.x) * scx;
+            float hy = mcy + (0.0f - player.pos.y) * scy;
+            if (hx >= mmx && hx <= mmx+mmw && hy >= mmy && hy <= mmy+mmh) {
+                Line hl[2] = {{{hx-6,hy},{hx+6,hy}},{{hx,hy-6},{hx,hy+6}}};
+                for (int i=0;i<2;i++){Shape s={&hl[i],1,(SDL_Color){100,255,255,255}};vg_draw_shape(&s,(Vec2){0,0},0.0f,1.0f);}
+            }
+        }
+        /* Asteroids (dim gray) */
+        for (int i = 0; i < MAX_ASTEROIDS; i++) {
+            if (!asteroids[i].active) continue;
+            float ax = mcx + (asteroids[i].pos.x - player.pos.x) * scx;
+            float ay = mcy + (asteroids[i].pos.y - player.pos.y) * scy;
+            if (ax < mmx || ax > mmx+mmw || ay < mmy || ay > mmy+mmh) continue;
+            Line l = {{ax,ay},{ax+1,ay+1}};
+            Shape s = {&l,1,(SDL_Color){90,90,90,160}};
+            vg_draw_shape(&s,(Vec2){0,0},0.0f,1.0f);
+        }
+        /* UFO (red cross) */
+        if (ufo.active) {
+            float ux = mcx + (ufo.pos.x - player.pos.x) * scx;
+            float uy = mcy + (ufo.pos.y - player.pos.y) * scy;
+            if (ux >= mmx && ux <= mmx+mmw && uy >= mmy && uy <= mmy+mmh) {
+                Line ul[2] = {{{ux-4,uy},{ux+4,uy}},{{ux,uy-4},{ux,uy+4}}};
+                for (int i=0;i<2;i++){Shape s={&ul[i],1,(SDL_Color){255,60,60,255}};vg_draw_shape(&s,(Vec2){0,0},0.0f,1.0f);}
+            }
+        }
+        /* NPCs (green) */
+        for (int i = 0; i < MAX_NPC; i++) {
+            if (!npcs[i].active) continue;
+            float nx = mcx + (npcs[i].pos.x - player.pos.x) * scx;
+            float ny = mcy + (npcs[i].pos.y - player.pos.y) * scy;
+            if (nx < mmx || nx > mmx+mmw || ny < mmy || ny > mmy+mmh) continue;
+            Line l = {{nx-2,ny},{nx+2,ny}};
+            Shape s = {&l,1,(SDL_Color){60,255,60,220}};
+            vg_draw_shape(&s,(Vec2){0,0},0.0f,1.0f);
+        }
+        /* Player (bright white cross) */
+        {
+            Line pl[2] = {{{mcx-5,mcy},{mcx+5,mcy}},{{mcx,mcy-5},{mcx,mcy+5}}};
+            for (int i=0;i<2;i++){Shape s={&pl[i],1,(SDL_Color){255,255,255,255}};vg_draw_shape(&s,(Vec2){0,0},0.0f,1.0f);}
+        }
+        /* Zone label + coordinates */
+        static const char* zone_names[] = {
+            "ZONE 0: HOME SPACE","ZONE 1: INNER BELT",
+            "ZONE 2: DEEP VOID","ZONE 3: THE ABYSS"
+        };
+        static SDL_Color zone_cols[] = {
+            {100,255,255,220},{160,210,255,220},{200,80,255,220},{255,80,80,220}
+        };
+        char coord_buf[48];
+        sprintf(coord_buf, "%.0f, %.0f", player.pos.x, player.pos.y);
+        vf_draw_string_centered(zone_names[player_zone], mmx+mmw*0.5f, mmy+mmh+14.0f, 9,
+                                zone_cols[player_zone]);
+        vf_draw_string_centered(coord_buf, mmx+mmw*0.5f, mmy+mmh+26.0f, 9,
+                                (SDL_Color){140,180,200,180});
+    }
+
+    /* ─── Edge arrow pointing home ─────────────────────────────── */
+    if ((game_state == STATE_PLAYING || game_state == STATE_PAUSED) && player.active) {
+        float home_sx = 0.0f - camera_pos.x;
+        float home_sy = 0.0f - camera_pos.y;
+        int on_screen = (home_sx > 30 && home_sx < SCREEN_WIDTH-30 &&
+                         home_sy > 30 && home_sy < SCREEN_HEIGHT-30);
+        if (!on_screen) {
+            float ddx = home_sx - SCREEN_WIDTH*0.5f;
+            float ddy = home_sy - SCREEN_HEIGHT*0.5f;
+            float dd  = sqrtf(ddx*ddx + ddy*ddy);
+            if (dd > 1.0f) {
+                ddx /= dd; ddy /= dd;
+                float t = 1e9f;
+                if (ddx >  0.001f) t = fminf(t, (SCREEN_WIDTH -45.0f - SCREEN_WIDTH*0.5f) / ddx);
+                if (ddx < -0.001f) t = fminf(t, (45.0f - SCREEN_WIDTH*0.5f) / ddx);
+                if (ddy >  0.001f) t = fminf(t, (SCREEN_HEIGHT-45.0f - SCREEN_HEIGHT*0.5f) / ddy);
+                if (ddy < -0.001f) t = fminf(t, (45.0f - SCREEN_HEIGHT*0.5f) / ddy);
+                float ax = SCREEN_WIDTH*0.5f + ddx*t;
+                float ay = SCREEN_HEIGHT*0.5f + ddy*t;
+                float px = -ddy, py = ddx;
+                float as = 11.0f;
+                Line arrow[3] = {
+                    {{ax+ddx*as, ay+ddy*as},{ax-ddx*8+px*7, ay-ddy*8+py*7}},
+                    {{ax+ddx*as, ay+ddy*as},{ax-ddx*8-px*7, ay-ddy*8-py*7}},
+                    {{ax-ddx*8+px*7,ay-ddy*8+py*7},{ax-ddx*8-px*7,ay-ddy*8-py*7}}
+                };
+                SDL_Color ac = {100,255,220,200};
+                for (int i=0;i<3;i++){Shape s={&arrow[i],1,ac};vg_draw_shape(&s,(Vec2){0,0},0.0f,1.0f);}
+                vf_draw_string_centered("HOME", ax, ay - 18.0f, 9, (SDL_Color){100,255,200,160});
+            }
+        }
+    }
+
     if (edge_flash_timer > 0.0f) {
         float alpha = edge_flash_timer / 0.15f;
         SDL_Color ef = {255, 255, 255, (Uint8)(alpha * 180)};
