@@ -69,3 +69,55 @@ Adapt Rogue's classic monster behaviors to space entities:
 - [ ] **Sensor Static (Blindness):** Sensor arrays are damaged by solar radiation, removing the minimap, targeting reticles, and flashing HUD data.
 - [ ] **Tox-Gas Hallucinations:** Space sickness or reactor leaks scramble visual outlines, turning wireframes into shifting geometric patterns (e.g., rendering simple asteroids as elite Cacogens).
 - [ ] **Reverse Drift (Confusion):** Thruster vector direction is reversed or randomized.
+
+---
+
+## ─── LORE & RETRO-ARCADE FEATURE DESIGN ───
+
+### 1. Phos-Green Engine Dust Trails (Visual/Flashy)
+- [ ] **Engine Particulate Drift:** Make the player's engine exhaust interact with floating cosmic dust. Moving at high speeds sucks in ambient particles, creating a brilliant glowing vector dust-trail proportional to ship velocity.
+
+### 2. "Cugel-9" Sarcastic Board Computer (Lore/Silly)
+- [ ] **Melancholic Text Logs:** A text-only virtual intelligence terminal named `CUGEL-9` that prints status reports on the HUD.
+  - [ ] E.g., when taking collision damage: `"STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE."`
+  - [ ] E.g., when missing several shots in a row: `"DISCHARGING BULLETS DIRECTLY INTO VACUUM. ASTEROIDS ARE UNIMPRESSED."`
+
+### 3. Star-Shadow Radiation Shielding (Tactical/Mechanic)
+- [ ] **Dying Sun Solar Flares:** The swollen star in the center of the zone periodically releases a Cinnabar-colored solar pulse.
+  - [ ] The player must steer the Autodyne into the physical shadow cast by large asteroids (rendering a dynamic vector shadow line) to shield themselves from system damage.
+
+### 4. Vector Stress-Cracking (Visual/Flashy)
+- [ ] **Structural Strain Outlines:** High-value metal and crystal asteroids display glowing wireframe stress cracks as they take damage, giving immediate visual feedback before they shatter.
+
+### 5. Chronicle Chord Harmonics (Audio/Flashy)
+- [ ] **Musical Orb Gathering:** Vacuuming up multiple Chronicle Orbs in rapid succession plays sequential notes on a procedural FM-synth scale (e.g. pentatonic or minor chord arpeggios), rewarding combo chains with harmonious music.
+
+### 6. Glitch Tearing Crit-Hits (Visual/Flashy)
+- [ ] **Matrix Disruption Frame-Hold:** Landing a critical strike or detonating a large rift causes the vector lines to briefly duplicate, shake, and tear across the horizontal scanlines, paired with a short white-noise audio screech.
+
+### 7. Emergency Heat Venting (Mechanic/Tactical)
+- [ ] **Coolant Blowback:** Rapid firing overheats the Autodyne weapons. The player can trigger an emergency vent that sprays superheated steam (dense vector line particles) forward, acting as an instant reverse thrust but consuming fuel.
+
+### 8. Warp-Drive Singularity Exit (Visual/Flashy)
+- [ ] **Warp Decal Configurations:** Unlock custom exit effects when jumping between loci. E.g., standard vector expansion, black-hole collapse (screen lines collapsing to a single pixel before exploding), or a static CRT screen-power-down flash.
+
+### 9. Dynamic CRT Glass Curvature (Visual/Aesthetic)
+- [ ] **Arcade Cabinet Curvature:** Add a toggleable pixel shader simulating the physical curved faceplate of a 1970s CRT vector arcade monitor, with subtle glass reflections on the corners.
+
+### 10. The Rusty Flagon Tavern Beacon (Lore/Interactable)
+- [ ] **Scavenger Hideout:** A rare neutral space station in the Scrap Fields.
+  - [ ] Docking lets the player trade forbidden Contraband resources, purchase secret coordinates, or play a quick vector-rendered roulette mini-game to double their Void Steel.
+
+### 11. Gravitational Slingshot Boosts (Physics/Tactical)
+- [ ] **Gravity Assist Trajectories:** Allows the player to enter a close orbit around massive black-hole rifts or heavy planetoids, gaining a high-velocity speed boost (catapult effect) for zero fuel cost.
+
+### 12. The Physical Bane-Whip (Weapon/Flashy)
+- [ ] **Kinetic Vector Whip:** An upgrade that tethers an elastic, segmented vector tail to the rear of the ship.
+  - [ ] Swerving or rotating at high speed whips the tail around, physically smashing smaller asteroids or deflecting incoming Cacogen fire.
+
+### 13. Pet Shield Drone Chatter (Silly/Visual)
+- [ ] **Drone Dialogues:** Orbital Shield Drones have tiny, low-contrast text dialogues floating over them.
+  - [ ] E.g., `"COORDINATING..."`, `"SHIELD AT 24% (HELP)"`, `"TARGET DETECTED: BIG ROCK"`.
+
+### 14. Asteroid Bowling Combo chains (Silly/Fun)
+- [ ] **Kinetic Launching:** Using heavy projectiles or gravity displacements to launch smaller asteroids into larger ones. Splintering a chain of rocks by bowling them into each other grants a special `"STRIKE!"` score float and multiplier.
