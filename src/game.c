@@ -351,7 +351,7 @@ typedef enum {
     KB_COUNT
 } KeyAction;
 static SDL_Scancode keybinds[KB_COUNT] = {
-    SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_TAB, SDL_SCANCODE_SPACE,
+    SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT, SDL_SCANCODE_UP, SDL_SCANCODE_SPACE,
     SDL_SCANCODE_ESCAPE, SDL_SCANCODE_RETURN,
     SDL_SCANCODE_1, SDL_SCANCODE_2, SDL_SCANCODE_3, SDL_SCANCODE_4,
     SDL_SCANCODE_TAB
@@ -1365,7 +1365,25 @@ void game_handle_input(SDL_Event *event) {
 
     if (event->type == SDL_KEYDOWN) {
         if (game_state == STATE_ATTRACT_GAMEPLAY) {
+            SDL_Keycode _asym = event->key.keysym.sym;
+            if (_asym >= SDLK_1 && _asym <= SDLK_9) {
+                // Number keys 1-9: gift a powerup to the attract-mode AI
+                switch ((int)(_asym - SDLK_1)) {
+                    case 0: player_upgrades.triple_shot = 1; break;
+                    case 1: player_upgrades.homing = 1; break;
+                    case 2: player_upgrades.shield_active = 1; break;
+                    case 3: player_upgrades.speed_mult *= 1.25f; break;
+                    case 4: player_upgrades.fire_cooldown_mult *= 0.75f; break;
+                    case 5: player_upgrades.piercing = 1; break;
+                    case 6: player_upgrades.mirror_image = 1; break;
+                    case 7: player_upgrades.resonance_cascade = 1; break;
+                    case 8: player_upgrades.thermal_hull = 1; break;
+                }
+                return; // don't exit attract mode
+            }
+            // Any other key: exit attract mode back to title
             game_state = STATE_TITLE;
+            is_attract_ai = 0;
             audio_stop(SFX_THRUST);
             audio_stop(SFX_UFO_LOOP);
             return;
@@ -1379,6 +1397,14 @@ void game_handle_input(SDL_Event *event) {
         }
 
         if (game_state == STATE_TITLE) {
+            // Ctrl+F5: manually trigger attract mode immediately
+            if (event->key.keysym.sym == SDLK_F5 && (SDL_GetModState() & KMOD_CTRL)) {
+                is_attract_ai = 1;
+                start_new_game();
+                game_state = STATE_ATTRACT_GAMEPLAY;
+                idle_timer = 0.0f;
+                return;
+            }
             if (event->key.keysym.sym == SDLK_UP || event->key.keysym.sym == SDLK_w) menu_selection = (menu_selection + 2) % 3;
             if (event->key.keysym.sym == SDLK_DOWN || event->key.keysym.sym == SDLK_s) menu_selection = (menu_selection + 1) % 3;
             if (event->key.keysym.sym == SDLK_SPACE || event->key.keysym.sym == SDLK_RETURN) {
@@ -3507,8 +3533,10 @@ void game_render() {
           if (menu_selection == 2) vf_draw_string(">", SCREEN_WIDTH/2.0f - tw/2.0f - 40.0f, SCREEN_HEIGHT/2.0f + 150, 22, c3); }
     } else if (game_state == STATE_PAUSED) {
         vf_draw_string_centered("PAUSED", SCREEN_WIDTH/2.0f, 70, 38, (SDL_Color){255, 255, 255, 255});
-        vf_draw_string_centered("S: SAVE   L: LOAD   Q: QUIT", SCREEN_WIDTH/2.0f, 130, 16, main_color);
-        vf_draw_string_centered("ESC TO RESUME", SCREEN_WIDTH/2.0f, 165, 13, (SDL_Color){150, 150, 180, 255});
+        vf_draw_string_centered("S: SAVE GAME", SCREEN_WIDTH/2.0f, 125, 20, main_color);
+        vf_draw_string_centered("L: LOAD GAME", SCREEN_WIDTH/2.0f, 152, 20, main_color);
+        vf_draw_string_centered("Q: QUIT TO TITLE", SCREEN_WIDTH/2.0f, 179, 20, main_color);
+        vf_draw_string_centered("ESC / SPACE: RESUME", SCREEN_WIDTH/2.0f, 206, 16, (SDL_Color){150, 150, 180, 255});
 
         // ── Relic Log ─────────────────────────────────────────────────────
         // Map active upgrades to name+description pairs
@@ -3530,9 +3558,9 @@ void game_render() {
         ADD_RELIC(player_upgrades.resonance_cascade,      "RESONANCE CASCADE", "Bolts unleash shockwaves      [ fires with FIRE key ]")
         #undef ADD_RELIC
         if (relic_count > 0) {
-            vf_draw_string_centered("YOUR RELICS", SCREEN_WIDTH/2.0f, 210, 15, (SDL_Color){180, 255, 200, 180});
-            float ry = 238.0f;
-            float row_h = (float)(SCREEN_HEIGHT - 290) / (relic_count < 12 ? relic_count : 12);
+            vf_draw_string_centered("YOUR RELICS", SCREEN_WIDTH/2.0f, 232, 15, (SDL_Color){180, 255, 200, 180});
+            float ry = 260.0f;
+            float row_h = (float)(SCREEN_HEIGHT - 310) / (relic_count < 12 ? relic_count : 12);
             if (row_h > 52.0f) row_h = 52.0f;
             int shown = relic_count < 12 ? relic_count : 12;
             for (int i = 0; i < shown; i++) {
@@ -3544,7 +3572,7 @@ void game_render() {
                 ry += row_h;
             }
         } else {
-            vf_draw_string_centered("NO RELICS EQUIPPED YET", SCREEN_WIDTH/2.0f, 220, 14, (SDL_Color){120,120,120,180});
+            vf_draw_string_centered("NO RELICS EQUIPPED YET", SCREEN_WIDTH/2.0f, 240, 14, (SDL_Color){120,120,120,180});
         }
     } else if (game_state == STATE_SETTINGS) {
         const char* tab_names[] = {"VIDEO", "AUDIO", "GAMEPLAY", "CONTROLS"};
