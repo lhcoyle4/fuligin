@@ -21,7 +21,7 @@
 #include <math.h>
 #include <stdlib.h>   /* rand() for particle init */
 #include <string.h>   /* strlen() for ui_section_divider label width estimate */
-
+#include <stdio.h>    /* sprintf() for combo string formatting */
 /* =========================================================
  * CONSTANTS
  * ========================================================= */
@@ -439,6 +439,63 @@ void ui_bar_block(SDL_Renderer *r, float x, float y,
 
         SDL_FRect blk = { bx, y, (float)(UI_BLOCK_W - 1), (float)UI_BLOCK_H };
         SDL_RenderFillRectF(r, &blk);
+    }
+}
+
+/**
+ * @brief Draw a dynamic combo multiplier UI.
+ *
+ * Displays a dynamic combo multiplier that reads the player's kill chain state and
+ * applies a random (dx, dy) jitter offset (screen shake) when the combo increases.
+ */
+void ui_combo_multiplier(SDL_Renderer *r, float x, float y, int combo_count, float combo_timer)
+{
+    static int s_last_combo = 0;
+    static float s_jitter_x = 0.0f;
+    static float s_jitter_y = 0.0f;
+    static float s_jitter_time = 0.0f;
+
+    if (combo_count > s_last_combo && combo_count > 1) {
+        s_jitter_time = 0.2f; /* 200ms of shake */
+        s_jitter_x = ((float)(rand() % 100) / 50.0f - 1.0f) * 6.0f;
+        s_jitter_y = ((float)(rand() % 100) / 50.0f - 1.0f) * 6.0f;
+    }
+    s_last_combo = combo_count;
+
+    float dx = 0.0f;
+    float dy = 0.0f;
+
+    if (s_jitter_time > 0.0f) {
+        /* Approximate decay (since we don't have delta_time here, we just decrease per frame) */
+        s_jitter_time -= 0.016f; 
+        if (s_jitter_time < 0.0f) {
+            s_jitter_time = 0.0f;
+        } else {
+            float env = s_jitter_time / 0.2f;
+            dx = s_jitter_x * env;
+            dy = s_jitter_y * env;
+        }
+    }
+
+    if (combo_count > 1) {
+        SDL_Color combo_col = HUD_AMBER; 
+        if (combo_count >= 4) {
+            combo_col = HUD_MAGENTA;
+        } else if (combo_count >= 2) {
+            combo_col = HUD_AMBER;
+        }
+
+        char text[32];
+        sprintf(text, "COMBO x%d", combo_count);
+        
+        vf_draw_string(text, x + dx, y + dy, 12, combo_col);
+
+        if (combo_timer > 0.0f) {
+            /* Draw a small bar under it. Max combo time is 1.8f (COMBO_WINDOW) */
+            ui_bar(r, x + dx, y + dy + 16.0f, 60.0f, 4.0f, combo_timer, 1.8f, combo_col);
+        }
+    } else {
+        vf_draw_string("COMBO x1", x, y, 9, HUD_TEXT_DIM);
     }
 }
 

@@ -5164,13 +5164,7 @@ static void render_hud(void)
 
         /* Row 3: COMBO */
         float row3_y = row2_y + HUD_ROW_H + 2.0f;
-        if (combo_count > 1) {
-            SDL_Color combo_col = ui_pulse(HUD_AMBER, game_time, 2.5f, 0.35f);
-            sprintf(hud_text, "COMBO x%d", combo_count);
-            vf_draw_string(hud_text, px + pad + HUD_TL_CUT, row3_y, 12, combo_col);
-        } else {
-            vf_draw_string("COMBO x1", px + pad + HUD_TL_CUT, row3_y, 9, HUD_TEXT_DIM);
-        }
+        ui_combo_multiplier(g_renderer, px + pad + HUD_TL_CUT, row3_y, combo_count, combo_timer);
     }
 
     /* ================================================================
