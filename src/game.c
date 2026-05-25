@@ -47,6 +47,7 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define MAX_NPC            4
 #define MAX_STRUCTURE      6
 #define MAX_SCORE_FLOATS  24
+#define MAX_EVENT_FLOATS  16   /* labeled text pop-ups: CRIT!, STRIKE!, HIT, etc. */
 #define MAX_WARP_LOCS      8
 #define SHOP_ITEMS_PER_PAGE 14
 #define PHOS_TRAIL_LEN    14  /* phosphor trail length (samples) */
@@ -397,6 +398,20 @@ typedef struct {
 } ScoreFloat;
 
 /**
+ * @brief A labeled text event pop-up (CRIT!, STRIKE!, HIT, VENT!) that
+ *        drifts upward in world space and fades out over ~1.5 seconds.
+ *        Distinct from ScoreFloat which shows a numeric value.
+ */
+typedef struct {
+    float     x, y, vy;
+    char      label[24];
+    SDL_Color color;
+    float     life;
+    float     max_life;
+    int       active;
+} EventFloat;
+
+/**
  * @brief A named warp-drive destination recorded for the warp-menu.
  */
 typedef struct {
@@ -629,6 +644,9 @@ static float combo_timer  = 0.0f;
 /* --- Score floaters --- */
 static ScoreFloat score_floats[MAX_SCORE_FLOATS];
 
+/* --- Event text floaters (CRIT!, STRIKE!, HIT, VENT!) --- */
+static EventFloat event_floats[MAX_EVENT_FLOATS];
+
 /* --- Upgrade selection --- */
 static UpgradeType upgrade_options[3];
 static int         selected_option = 0;
@@ -813,6 +831,7 @@ static void load_game(void);
 
 /* Entity helpers */
 static void spawn_particles(Vec2 pos, int count, SDL_Color color);
+static void spawn_event_float(float x, float y, const char *label, SDL_Color color);
 static void init_asteroid_shape(AsteroidEntity *a, int size);
 static void spawn_asteroid(Vec2 pos, int size);
 static void reset_player(void);
@@ -1287,6 +1306,32 @@ static void spawn_particles(Vec2 pos, int count, SDL_Color color)
 }
 
 /* =========== ENTITY SPAWNING =========== */
+
+/* ----------- Event Text Floaters ----------- */
+
+/** @brief Spawns a labeled event text pop-up at world position (x, y).
+ *  Drifts upward and fades over ~1.5 s. Used for CRIT!, HIT, VENT!, etc.
+ *  @param label  Short null-terminated string (max 23 chars).
+ *  @param color  Render tint — HUD_CINNABAR for damage, HUD_AMBER for STRIKE!.
+ */
+static void spawn_event_float(float x, float y, const char *label, SDL_Color color)
+{
+    for (int i = 0; i < MAX_EVENT_FLOATS; i++) {
+        if (!event_floats[i].active) {
+            event_floats[i].active   = 1;
+            event_floats[i].x        = x;
+            event_floats[i].y        = y - 16.0f;
+            event_floats[i].vy       = -55.0f;
+            event_floats[i].color    = color;
+            event_floats[i].life     = 1.5f;
+            event_floats[i].max_life = 1.5f;
+            int n = 0;
+            while (label[n] && n < 23) { event_floats[i].label[n] = label[n]; n++; }
+            event_floats[i].label[n] = '\0';
+            break;
+        }
+    }
+}
 
 /* ----------- Asteroid Shape & Spawning ----------- */
 
@@ -1783,6 +1828,7 @@ static void start_new_game()
     for (int i = 0; i < MAX_PARTICLES; i++)    particles[i].life      = 0.0f;
     for (int i = 0; i < MAX_ORBS; i++)         orbs[i].active         = 0;
     for (int i = 0; i < MAX_SCORE_FLOATS; i++) score_floats[i].active = 0;
+    for (int i = 0; i < MAX_EVENT_FLOATS; i++)  event_floats[i].active  = 0;
 
     combo_count = 0;
     combo_timer = 0.0f;
@@ -4109,6 +4155,8 @@ static void update_collisions(float dt)
             audio_play(SFX_EXPLOSION_LG);
             audio_stop(SFX_THRUST);
             spawn_particles(player.pos, 35, (SDL_Color){255, 200, 100, 255});
+            spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                              "HIT", HUD_CINNABAR);
 
             /* Stone splits on impact */
             asteroids[a].active = 0;
@@ -4150,6 +4198,8 @@ static void update_collisions(float dt)
                 audio_play(SFX_EXPLOSION_LG);
                 spawn_particles(player.pos, 35, (SDL_Color){255, 200, 100, 255});
                 spawn_particles(ufo.pos,    25, (SDL_Color){255, 180,  50, 255});
+                spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                                  "HIT", HUD_CINNABAR);
                 lives--;
                 if (lives <= 0) game_state = STATE_GAMEOVER;
                 ufo_spawn_timer = 20.0f + ((float)rand() / RAND_MAX) * 15.0f;
@@ -4195,6 +4245,8 @@ static void update_collisions(float dt)
                     audio_stop(SFX_THRUST);
                     spawn_particles(player.pos, 35,
                                     (SDL_Color){255, 200, 100, 255});
+                    spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                                      "HIT", HUD_CINNABAR);
                     lives--;
                     if (lives <= 0) {
                         game_state = STATE_GAMEOVER;
@@ -4323,6 +4375,15 @@ static void update_progression(float dt)
         score_floats[i].life -= dt;
         if (score_floats[i].life <= 0.0f)
             score_floats[i].active = 0;
+    }
+
+    /* Event text floaters: drift upward and fade (CRIT!, HIT, VENT!, etc.) */
+    for (int i = 0; i < MAX_EVENT_FLOATS; i++) {
+        if (!event_floats[i].active) continue;
+        event_floats[i].y    += event_floats[i].vy * dt;
+        event_floats[i].life -= dt;
+        if (event_floats[i].life <= 0.0f)
+            event_floats[i].active = 0;
     }
 
     /* XP-bar flash decay */
@@ -5592,10 +5653,71 @@ static void render_overlays(void)
                                 score_floats[i].x, score_floats[i].y, 14, fc);
     }
 
+    /* Event text floaters (CRIT!, HIT, VENT!, etc.) — world space, scale pulse */
+    for (int i = 0; i < MAX_EVENT_FLOATS; i++) {
+        if (!event_floats[i].active) continue;
+        float t      = event_floats[i].life / event_floats[i].max_life;
+        Uint8 alpha  = (t > 0.6f) ? 255 : (Uint8)(t / 0.6f * 255);
+        float sz     = 12.0f + 4.0f * t;
+        SDL_Color ec = event_floats[i].color; ec.a = alpha;
+        vf_draw_string_centered(event_floats[i].label,
+                                event_floats[i].x, event_floats[i].y,
+                                sz, ec);
+    }
+
     /* Switch to screen space for all remaining overlays */
     vg_set_camera((Vec2){0.0f, 0.0f});
 
-    /* Edge-wrap flash — bright border momentarily when ship wraps */
+    /* ── CRT Scanline Shimmer ────────────────────────────────────────────────────────────────
+     * Applies only to the gameplay viewport (not menus).
+     * Two passes:
+     *   1. Static scanline grid -- 1px black lines every 4px at ~8% opacity,
+     *      giving the screen a classic CRT interlace texture.
+     *   2. Periodic phosphor sweep -- a bright teal band rolls from top to
+     *      bottom of the screen every 4 seconds, simulating the CRT electron
+     *      beam refresh. Alpha peaks at the sweep centre and falls off above
+     *      and below.
+     * Toggled by g_settings.graphics.scanlines.                            */
+    if (g_settings.graphics.scanlines &&
+        (game_state == STATE_PLAYING ||
+         game_state == STATE_PAUSED  ||
+         game_state == STATE_ATTRACT_GAMEPLAY)) {
+
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+
+        /* Pass 1: static scanline grid */
+        SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, 20);   /* ~8% black */
+        for (int sl = 0; sl < SCREEN_HEIGHT; sl += 4) {
+            SDL_RenderDrawLine(g_renderer, 0, sl, SCREEN_WIDTH, sl);
+        }
+
+        /* Pass 2: rolling phosphor sweep
+         * Period = 4.0s; sweep_y travels 0->SCREEN_HEIGHT over one period. */
+        {
+            float period  = 4.0f;
+            float phase   = fmodf(game_time, period) / period;   /* 0->1 */
+            float sweep_y = phase * (float)SCREEN_HEIGHT;
+
+            /* Five stacked lines -- bright centre, dim halos above/below */
+            static const struct { int dy; Uint8 alpha; } sweep_passes[] = {
+                { -2,  8 },   /* upper halo   */
+                { -1, 22 },   /* upper fringe */
+                {  0, 42 },   /* centre -- brightest */
+                {  1, 22 },   /* lower fringe */
+                {  2,  8 },   /* lower halo   */
+            };
+            for (int sp = 0; sp < 5; sp++) {
+                int ly = (int)sweep_y + sweep_passes[sp].dy;
+                if (ly < 0 || ly >= SCREEN_HEIGHT) continue;
+                /* Teal phosphor tint -- matches the vector screen colour */
+                SDL_SetRenderDrawColor(g_renderer,
+                    0, 210, 230, sweep_passes[sp].alpha);
+                SDL_RenderDrawLine(g_renderer, 0, ly, SCREEN_WIDTH, ly);
+            }
+        }
+    }
+
+    /* Edge-wrap flash -- bright border momentarily when ship wraps */
     if (edge_flash_timer > 0.0f) {
         float alpha = edge_flash_timer / 0.15f;
         SDL_Color ef = HUD_BORDER_ACTIVE; ef.a = (Uint8)(alpha * 180);
@@ -5787,6 +5909,58 @@ static void render_overlays(void)
                 Shape cs = {&cl[ci], 1, xhc};
                 vg_draw_shape(&cs, (Vec2){0, 0}, 0.0f, 1.0f);
             }
+        }
+    }
+
+    /* ── Viewport-wide CRT scanline shimmer ─────────────────────────────
+     * A single bright sweep line descends across the full gameplay viewport
+     * every 3-5 seconds when g_settings.graphics.scanlines is enabled.
+     * Runs in screen space (camera reset to origin).                      */
+    if (g_settings.graphics.scanlines) {
+        static float scan_timer     = 0.0f;   /* time until next sweep    */
+        static float scan_y         = -1.0f;  /* current sweep position   */
+        static float scan_period    = 4.0f;   /* seconds between sweeps   */
+        static int   scan_sweeping  = 0;       /* 1 while sweep is active  */
+
+        float dt = 0.016f;   /* fixed step — same as g_ghost_t increment  */
+
+        if (!scan_sweeping) {
+            scan_timer -= dt;
+            if (scan_timer <= 0.0f) {
+                scan_sweeping = 1;
+                scan_y        = 0.0f;
+                /* Randomise next period in [3, 5] seconds */
+                scan_period = 3.0f + ((float)(rand() % 2000) / 1000.0f);
+                scan_timer  = scan_period;
+            }
+        } else {
+            /* Sweep at 220 px/s so it crosses a 720p viewport in ~3.3 s */
+            scan_y += 220.0f * dt;
+            if (scan_y > (float)SCREEN_HEIGHT) {
+                scan_sweeping = 0;
+                scan_y        = -1.0f;
+            }
+        }
+
+        if (scan_sweeping && scan_y >= 0.0f) {
+            /* Switch to screen space for the scanline */
+            vg_set_camera((Vec2){0.0f, 0.0f});
+            SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+
+            /* Primary bright line ~7% opacity */
+            SDL_SetRenderDrawColor(g_renderer, 200, 220, 255, 18);
+            SDL_RenderDrawLineF(g_renderer,
+                                0.0f, scan_y,
+                                (float)SCREEN_WIDTH, scan_y);
+
+            /* Soft glow: two flanking lines at ~4% opacity */
+            SDL_SetRenderDrawColor(g_renderer, 200, 220, 255, 10);
+            SDL_RenderDrawLineF(g_renderer,
+                                0.0f, scan_y - 1.0f,
+                                (float)SCREEN_WIDTH, scan_y - 1.0f);
+            SDL_RenderDrawLineF(g_renderer,
+                                0.0f, scan_y + 1.0f,
+                                (float)SCREEN_WIDTH, scan_y + 1.0f);
         }
     }
 
@@ -6378,16 +6552,15 @@ static void render_menus(void)
 void game_render(void)
 {
     /*
-     * Persistence table mirrors the five settings_glow levels.
-     * A value of 1.0 = no fade (infinite persistence); lower values
-     * cause the phosphor trail to decay faster each frame.
+     * Persistence table mirrors the five settings_glow levels (0-4).
+     * 1.0 = no fade (infinite persistence); lower = faster phosphor decay.
      */
     static const float persistence_levels[] = {1.0f, 0.95f, 0.90f, 0.82f, 0.70f};
     vg_apply_persistence(persistence_levels[settings_glow]);
 
-    /* Advance visual-effect timers.  Fixed-step accumulation per frame.
-     * Frame-rate dependence is acceptable: these drive purely aesthetic
-     * flicker; exact timing is not gameplay-relevant. */
+    /* Advance visual-effect timers. Fixed-step accumulation per frame.
+     * Frame-rate dependence is acceptable here -- these drive purely
+     * aesthetic flicker; exact timing is not gameplay-relevant. */
     g_ghost_t      += 0.016f;
     g_flame_t      += 0.22f;
     g_shield_pulse += 0.05f;
@@ -6396,18 +6569,18 @@ void game_render(void)
         game_state == STATE_PAUSED   ||
         game_state == STATE_ATTRACT_GAMEPLAY) {
 
-        /* World space — entities, score floats, world-space overlays */
+        /* World space -- entities, score floats, world-space overlays */
         vg_set_camera(camera_pos);
         render_entities();
         render_overlays();   /* resets camera to (0,0) internally */
 
-        /* Screen space — HUD and minimap */
+        /* Screen space -- HUD and minimap */
         vg_set_camera((Vec2){0.0f, 0.0f});
         render_hud();
         render_minimap();
     }
 
-    /* Menus and full-screen states — always screen space */
+    /* Menus and full-screen states -- always screen space */
     vg_set_camera((Vec2){0.0f, 0.0f});
     render_menus();
     vg_present();

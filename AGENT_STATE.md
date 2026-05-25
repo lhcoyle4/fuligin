@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Score/Event Floats — typed event floats with color, label, scale pulse (Action List item 7)
-- **Locked Files**: src/game.c
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -37,3 +37,4 @@
 | Claude | Cacogen UFO Auditory Signature: FM dual-oscillator wobble+shimmer loop | agent/claude | 2026-05-25 |
 | Claude | Vector Stress-Cracking: wireframe crack lines on hit metal/crystal asteroids | agent/claude | 2026-05-25 |
 | Claude | Chronicle Chord Harmonics: pentatonic FM arpeggio on rapid orb collection | agent/claude | 2026-05-25 |
+| Claude | Score/Event Floats: EventFloat pool, typed HIT/CRIT/CHRONICLE/VENT labels with scale+fade | agent/claude | 2026-05-25 |
