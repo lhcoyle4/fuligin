@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Screen-edge zone vignette — PHOTIC RUST tint scaling with zone depth + CINNABAR beat pulse
+- **Locked Files**: src/game.c
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
