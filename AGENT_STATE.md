@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: main
-- **Active Task**: Add FULIGIN_ACTION_LIST.md to repo
-- **Locked Files**: FULIGIN_ACTION_LIST.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -31,3 +31,4 @@
 | Gemini | todo.md: 14-feature roadmap | (merged) | 2025 |
 | Claude | Merge all branches → main (PR #1, all features preserved) | de0c317 | 2026-05-25 |
 | Claude | Mouse button keybinds: LMB=shoot, RMB=thrust, MMB=hyperspace | c9d99e5 | 2026-05-25 |
+| Claude | Add FULIGIN_ACTION_LIST.md (32-item roadmap) | 226e3bb | 2026-05-25 |
