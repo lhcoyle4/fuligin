@@ -182,7 +182,13 @@
         }
       },
 
-      monitorRunDependencies: function(left) {}
+      monitorRunDependencies: function(left) {},
+
+      onExit: function(code) {
+        if (window !== window.parent) {
+          window.parent.postMessage('permadrift_exit', '*');
+        }
+      }
     };
 
     // Keyboard focus — keep canvas focused when the game is running
