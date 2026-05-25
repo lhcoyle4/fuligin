@@ -1,44 +1,33 @@
-# Active Agent Workspace Locks
+# FULIGIN Agent State
+<!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
-**Protocol:** Every agent MUST update this file when starting or finishing a task.
-All lock changes must be committed immediately. No agent may edit a locked file
-without first acquiring the lock in this document. See COWORKING_PROTOCOL.md.
+## Agent: Claude (Anthropic)
+- **Status**: Idle
+- **Branch**: main
+- **Active Task**: None
+- **Locked Files**: None
+- **Last Updated**: 2026-05-25
 
----
+## Agent: Gemini (Google)
+- **Status**: Idle
+- **Branch**: main
+- **Active Task**: None
+- **Locked Files**: None
+- **Last Updated**: 2026-05-25
 
-## Antigravity (Gemini)
-*   **Current Branch:** `main`
-*   **Active Task:** Idle — awaiting next task assignment
-*   **Locked Files/Paths:**
-    *   None
-
-## Linux Desktop
-*   **Current Branch:** `main`
-*   **Active Task:** Idle — awaiting next task assignment
-*   **Locked Files/Paths:**
-    *   None
-
-## Claude
-*   **Current Branch:** `main`
-*   **Active Task:** feat: mouse button default keybinds (LMB=shoot, RMB=thrust, MMB=hyperspace)
-*   **Locked Files/Paths:**
-    *   `include/game.h` — add mouse_fire_btn, mouse_thrust_btn, mouse_hyper_btn to ControlsSettings
-    *   `src/game.c`     — wire mouse button fields into input polling + event handler; save/load; settings UI
-
-**Do NOT edit the above files until Claude pushes the completion commit and updates this file to Idle.**
-
----
+## Agent: Human (Louie)
+- **Status**: Idle
+- **Branch**: main
+- **Active Task**: None
+- **Locked Files**: None
+- **Last Updated**: 2026-05-25
 
 ## Completed Work Log
-
-### Claude — Phase 2 COMPLETE (commit 183b5a5, 2026-05-25)
-Phase 2: Noctis HUD overhaul + comprehensive settings system
-Merged to: main (2026-05-25 merge commit)
-
-### Claude — Phase 3 COMPLETE (commit 0eecfae, 2026-05-25)
-Phase 3: Makefile rename + ai.c source inclusion
-Merged to: main (2026-05-25 merge commit)
-
-### Gemini — todo.md COMPLETE (commit 63cf586, 2026-05-25)
-Added todo.md: full FULIGIN + Rogue-inspired roadmap
-Merged to: main via PR #1 (2026-05-25 merge commit)
+| Agent  | Task | Commit(s) | Date |
+|--------|------|-----------|------|
+| Claude | Phase 1: Project rename, SDL2 setup, core game loop | (merged) | 2025 |
+| Claude | Phase 2: HUD overhaul, vector font | (merged) | 2025 |
+| Claude | Phase 3: World Builder, enemy spawning, AI stub | (merged) | 2025 |
+| Gemini | todo.md: 14-feature roadmap | (merged) | 2025 |
+| Claude | Merge all branches → main (PR #1, all features preserved) | de0c317 | 2026-05-25 |
+| Claude | Mouse button keybinds: LMB=shoot, RMB=thrust, MMB=hyperspace | c9d99e5 | 2026-05-25 |
