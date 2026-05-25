@@ -133,6 +133,7 @@ typedef struct {
     Vec2 vel;
     int size;
     float radius;
+    float angle;       /* Current facing angle (radians) -- used by kamikaze */
     Line lines[16];
     int line_count;
     float fire_timer;
@@ -737,10 +738,13 @@ static void spawn_asteroid(Vec2 pos, int size) {
 }
 static void reset_player() {
     player.active = 1;
-    player.pos = (Vec2){SCREEN_WIDTH / 2.0f, SCREEN_HEIGHT / 2.0f};
+    /* Respawn at random position within the current visible screen area */
+    float margin = 80.0f;
+    player.pos.x = camera_pos.x + margin + ((float)rand() / RAND_MAX) * (SCREEN_WIDTH  - margin * 2.0f);
+    player.pos.y = camera_pos.y + margin + ((float)rand() / RAND_MAX) * (SCREEN_HEIGHT - margin * 2.0f);
     player.vel = (Vec2){0.0f, 0.0f};
     player.angle = 0.0f;
-    player.invuln_timer = 2.0f; // 2 seconds invulnerability
+    player.invuln_timer = 2.0f; /* 2 seconds invulnerability */
 }
 
 static void spawn_ufo() {
@@ -833,8 +837,10 @@ static void trigger_hyperspace() {
         return;
     }
     
-    player.pos.x = ((float)rand() / RAND_MAX) * SCREEN_WIDTH;
-    player.pos.y = ((float)rand() / RAND_MAX) * SCREEN_HEIGHT;
+    /* Hyperspace lands within current visible screen area (not world origin) */
+    float margin = 80.0f;
+    player.pos.x = camera_pos.x + margin + ((float)rand() / RAND_MAX) * (SCREEN_WIDTH  - margin * 2.0f);
+    player.pos.y = camera_pos.y + margin + ((float)rand() / RAND_MAX) * (SCREEN_HEIGHT - margin * 2.0f);
     player.vel = (Vec2){0.0f, 0.0f};
     player.invuln_timer = 0.5f;
 }
@@ -1925,9 +1931,15 @@ void game_update(float delta_time) {
 
     // --- Update UFO ---
     if (ufo.active) {
-        // Record trail
+        /* Kamikaze faces movement direction (nose at +X, atan2f(y,x) maps directly) */
+        {
+            float vspd = sqrtf(ufo.vel.x * ufo.vel.x + ufo.vel.y * ufo.vel.y);
+            if (ufo.size == 3 && vspd > 1.0f)
+                ufo.angle = atan2f(ufo.vel.y, ufo.vel.x);
+        }
+        /* Record trail */
         ufo.trail_pos[ufo.trail_head] = ufo.pos;
-        ufo.trail_ang[ufo.trail_head] = 0.0f;
+        ufo.trail_ang[ufo.trail_head] = ufo.angle;
         ufo.trail_head = (ufo.trail_head + 1) % PHOS_TRAIL_LEN;
 
         Vec2 ext_f = calculate_external_forces(ufo.pos);
@@ -2509,9 +2521,19 @@ void game_render() {
         s.lines = ufo.lines;
         s.line_count = ufo.line_count;
         s.color = (SDL_Color){255, 180, 180, 255};
-        float scale = (ufo.size == 2) ? 1.0f : 0.5f;
+        /* Scale enemies to be roughly player-ship-sized (~16-22px at scale 1.0) */
+        /* Kamikaze (size 3) rotates to face its movement direction */
+        float scale, draw_angle = 0.0f;
+        switch (ufo.size) {
+            case 1:  scale = 0.7f; break;                         /* Small saucer ~22px */
+            case 2:  scale = 1.2f; break;                         /* Large saucer ~38px */
+            case 3:  scale = 1.0f; draw_angle = ufo.angle; break; /* Kamikaze, rotates  */
+            case 4:  scale = 0.9f; break;                         /* Bomber ~36px       */
+            case 5:  scale = 1.5f; break;                         /* Eye of Void ~48px  */
+            default: scale = 1.0f; break;
+        }
         vg_draw_shape_trail(&s, ufo.trail_pos, ufo.trail_ang, PHOS_TRAIL_LEN, ufo.trail_head, scale, 0.4f, 0.75f);
-        vg_draw_shape(&s, ufo.pos, 0.0f, scale);
+        vg_draw_shape(&s, ufo.pos, draw_angle, scale);
     }
 
     if (player_rift.active) {

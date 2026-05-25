@@ -47,9 +47,8 @@ if %errorlevel% == 0 (
     goto :done
 )
 
-:: Commit with a short timestamp
-for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /format:list') do set DT=%%I
-set STAMP=%DT:~0,4%-%DT:~4,2%-%DT:~6,2% %DT:~8,2%:%DT:~10,2%
+:: Commit with a short timestamp (PowerShell, since wmic is unavailable on Win11)
+for /f %%I in ('powershell -Command "Get-Date -Format \"yyyy-MM-dd HH:mm\""') do set STAMP=%%I
 
 git commit -m "PERMADRIFT update %STAMP%"
 
