@@ -1,6 +1,10 @@
 # Active Agent Workspace Locks
 
-## Antigravity (Gemini) — Current Branch: agent/gemini, Active Task: Idle, Locked: None
+## Antigravity (Gemini)
+*   **Current Branch:** `agent/gemini`
+*   **Active Task:** Idle (Waiting for Claude's UI locks to release)
+*   **Locked Files/Paths:**
+    *   None
 
 ## Claude — Current Branch: antigravity, Active Task: FF7R/CoQ HUD UI Overhaul, Locked: STYLE_GUIDE.md, include/ui.h, src/ui.c, src/game.c
 
