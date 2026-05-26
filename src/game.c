@@ -19,6 +19,7 @@
 #include "audio.h"
 #include "ui.h"
 #include "world_builder.h"
+#include "drone_chatter.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -323,6 +324,7 @@ typedef struct {
     float radius;
     float orbit_angle;    /* current orbit angle around player */
     float contact_timer;  /* accumulated time player has been nearby */
+    float chatter_timer;  /* countdown until next drone_chatter emit */
 } NpcEntity;
 
 /**
@@ -1554,6 +1556,7 @@ static void spawn_npc(Vec2 pos)
             npcs[i].orbit_angle  =
                 ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
             npcs[i].contact_timer = 0.0f;
+            npcs[i].chatter_timer = 1.5f + ((float)rand() / RAND_MAX) * 4.5f;
             return;
         }
     }
@@ -2169,6 +2172,7 @@ void game_init()
 {
     load_high_scores();
     vf_init();
+    drone_chatter_init();   /* Item 27: pet shield-drone chatter pool */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -4061,6 +4065,53 @@ static void update_particles_orbs_npcs(float dt)
         }
         npcs[i].angle = atan2f(npcs[i].vel.y, npcs[i].vel.x);
 
+        /* ─── Item 27: drone chatter — periodic mumbles above each drone ── */
+        npcs[i].chatter_timer -= dt;
+        if (npcs[i].chatter_timer <= 0.0f) {
+            /* Pick an event based on current game state. Threat events take
+             * priority over idle chatter. Float spawns at the drone's head. */
+            float fx = npcs[i].pos.x;
+            float fy = npcs[i].pos.y;
+            DroneEvent evt = DRONE_EVT_COORDINATING;
+
+            /* UFO threat: prefer TARGET_UFO when a saucer is active and the
+             * drone is closer than 600 u to it (or to the player it shadows). */
+            if (ufo.active) {
+                float udx = ufo.pos.x - npcs[i].pos.x;
+                float udy = ufo.pos.y - npcs[i].pos.y;
+                if (udx*udx + udy*udy < 600.0f * 600.0f) {
+                    evt = DRONE_EVT_TARGET_UFO;
+                }
+            }
+
+            /* Big asteroid nearby: TARGET_LARGE if a size-3+ rock is within 250 u. */
+            if (evt == DRONE_EVT_COORDINATING) {
+                for (int ai = 0; ai < MAX_ASTEROIDS; ai++) {
+                    if (!asteroids[ai].active) continue;
+                    if (asteroids[ai].size < 3) continue;
+                    float ax = asteroids[ai].pos.x - npcs[i].pos.x;
+                    float ay = asteroids[ai].pos.y - npcs[i].pos.y;
+                    if (ax*ax + ay*ay < 250.0f * 250.0f) {
+                        evt = DRONE_EVT_TARGET_LARGE;
+                        break;
+                    }
+                }
+            }
+
+            /* Player in trouble: emit HELP if lives are dangerously low. */
+            if (evt == DRONE_EVT_COORDINATING && player.active && lives <= 1) {
+                evt = DRONE_EVT_HELP;
+            }
+
+            drone_chatter_emit_event(fx, fy, evt);
+
+            /* Re-arm: 2.5–6 s for idle, 1.2–2.8 s for threat callouts. */
+            float min_t = (evt == DRONE_EVT_COORDINATING) ? 2.5f : 1.2f;
+            float max_t = (evt == DRONE_EVT_COORDINATING) ? 6.0f : 2.8f;
+            npcs[i].chatter_timer =
+                min_t + ((float)rand() / RAND_MAX) * (max_t - min_t);
+        }
+
         /* NPC dies if struck by a player bullet */
         for (int b = 0; b < MAX_BULLETS; b++) {
             if (!bullets[b].active) continue;
@@ -4958,6 +5009,7 @@ void game_update(float dt)
     update_ufo(dt);
     update_ufo_bullets(dt);
     update_particles_orbs_npcs(dt);
+    drone_chatter_update(dt);   /* Item 27: tick fade timers on drone chatter floats */
     update_collisions(dt);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
@@ -5693,6 +5745,12 @@ static void render_entities(void)
                     sizeof(npc_drone_lines) / sizeof(Line), nc};
         vg_draw_shape(&ns, npcs[i].pos, npcs[i].angle, 0.9f);
     }
+
+    /* ── Item 27: pet shield-drone chatter floats ─────────────────── */
+    /* vf_draw_string uses raw screen coords; drone_chatter does its own
+     * world→screen subtraction using camera_pos. Called after NPC shapes
+     * so floats render on top of the drone diamond glyphs.              */
+    drone_chatter_render(g_renderer, camera_pos.x, camera_pos.y);
 }
 
 /* ────────────────────────────────────────────────────────────────────── */

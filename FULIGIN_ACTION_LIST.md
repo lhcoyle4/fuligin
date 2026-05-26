@@ -85,7 +85,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **26. Cugel-9 board computer** ✅ [DONE] *(terminal style)* — HUD text log panel using `ui_panel_terminal()`. Format: `[CUGEL-9]: STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE.` — monospace, dim cyan label, ghost white body text. Plus TTS using sad/melancholic robot voice. Reference: `FULIGIN_Guide.pdf` p.2 lore text style (italic monospace blockquote).
 
-**27. Pet shield drone chatter** *(terminal style)* — Tiny `Share Tech Mono` text floats above orbital drones: `[HELP]`, `"TARGET: BIG ROCK"`, `"SHIELD AT 24%"`. Low-contrast cyan.
+**27. Pet shield drone chatter** ✅ [DONE] *(terminal style)* — Tiny `Share Tech Mono` text floats above orbital drones: `[HELP]`, `"TARGET: BIG ROCK"`, `"SHIELD AT 24%"`. Low-contrast cyan. Integrated into `src/game.c` (NPC update loop emits TARGET_UFO / TARGET_LARGE / HELP / COORDINATING events based on game state with 1.2–6 s re-arm; rendered after NPC shapes in world-camera space; `drone_chatter.c` added to Makefile SRC).
 
 **28. The Rusty Flagon Tavern Beacon** *(menu style)* — Rare neutral station. Docking opens an FF7R-style menu overlay (angled panels) for trading contraband, buying coordinates, or playing vector roulette.
 

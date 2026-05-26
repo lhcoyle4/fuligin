@@ -117,8 +117,8 @@ Adapt Rogue's classic monster behaviors to space entities:
   - [ ] Swerving or rotating at high speed whips the tail around, physically smashing smaller asteroids or deflecting incoming Cacogen fire.
 
 ### 13. Pet Shield Drone Chatter (Silly/Visual)
-- [ ] **Drone Dialogues:** Orbital Shield Drones have tiny, low-contrast text dialogues floating over them.
-  - [ ] E.g., `"COORDINATING..."`, `"SHIELD AT 24% (HELP)"`, `"TARGET DETECTED: BIG ROCK"`.
+- [x] **Drone Dialogues:** Orbital Shield Drones have tiny, low-contrast text dialogues floating over them.
+  - [x] E.g., `"COORDINATING..."`, `"SHIELD AT 24% (HELP)"`, `"TARGET DETECTED: BIG ROCK"`.
 
 ### 14. Asteroid Bowling Combo chains (Silly/Fun)
 - [x] **Kinetic Launching:** Using heavy projectiles or gravity displacements to launch smaller asteroids into larger ones. Splintering a chain of rocks by bowling them into each other grants a special `"STRIKE!"` score float and multiplier.
