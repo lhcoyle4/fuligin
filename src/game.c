@@ -5900,40 +5900,40 @@ static void render_minimap(void)
         }
     }
 
-    /* Asteroids — 1×1 px HUD_TEXT_DARK dots */
-    SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
-    SDL_SetRenderDrawColor(g_renderer,
-        HUD_TEXT_DARK.r, HUD_TEXT_DARK.g, HUD_TEXT_DARK.b, HUD_TEXT_DARK.a);
+    /* Asteroids - White radar blips */
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         if (!asteroids[i].active) continue;
         float ax = mcx + (asteroids[i].pos.x - player.pos.x) * scx;
         float ay = mcy + (asteroids[i].pos.y - player.pos.y) * scy;
         if (ax < mmx || ax > mmx + mmw || ay < mmy || ay > mmy + mmh) continue;
-        SDL_FRect adot = {ax - 0.5f, ay - 0.5f, 1.0f, 1.0f};
-        SDL_RenderFillRectF(g_renderer, &adot);
+        ui_minimap_blip(g_renderer, ax, ay, (SDL_Color){255, 255, 255, 255}, 1.0f);
     }
 
-    /* Enemy (UFO) — 2×2 px dim cinnabar */
+    /* Enemy (UFO) - Red radar blips */
     if (ufo.active) {
         float ux = mcx + (ufo.pos.x - player.pos.x) * scx;
         float uy = mcy + (ufo.pos.y - player.pos.y) * scy;
         if (ux >= mmx && ux <= mmx + mmw && uy >= mmy && uy <= mmy + mmh) {
-            SDL_SetRenderDrawColor(g_renderer,
-                HUD_CINNABAR_DIM.r, HUD_CINNABAR_DIM.g, HUD_CINNABAR_DIM.b, 200);
-            SDL_FRect edot = {ux - 1.0f, uy - 1.0f, 2.0f, 2.0f};
-            SDL_RenderFillRectF(g_renderer, &edot);
+            ui_minimap_blip(g_renderer, ux, uy, (SDL_Color){255, 0, 0, 255}, 2.0f);
         }
     }
 
-    /* NPCs — dim green 2×2 dot */
+    /* Anomalies/Rifts - Purple radar blips */
+    if (rift.active) {
+        float rx = mcx + (rift.pos.x - player.pos.x) * scx;
+        float ry = mcy + (rift.pos.y - player.pos.y) * scy;
+        if (rx >= mmx && rx <= mmx + mmw && ry >= mmy && ry <= mmy + mmh) {
+            ui_minimap_blip(g_renderer, rx, ry, (SDL_Color){160, 32, 240, 255}, 3.0f);
+        }
+    }
+
+    /* NPCs - Green radar blips */
     for (int i = 0; i < MAX_NPC; i++) {
         if (!npcs[i].active) continue;
         float nx = mcx + (npcs[i].pos.x - player.pos.x) * scx;
         float ny = mcy + (npcs[i].pos.y - player.pos.y) * scy;
         if (nx < mmx || nx > mmx + mmw || ny < mmy || ny > mmy + mmh) continue;
-        SDL_SetRenderDrawColor(g_renderer, 20, 90, 8, 180);
-        SDL_FRect ndot = {nx - 1.0f, ny - 1.0f, 2.0f, 2.0f};
-        SDL_RenderFillRectF(g_renderer, &ndot);
+        ui_minimap_blip(g_renderer, nx, ny, (SDL_Color){20, 180, 20, 255}, 2.0f);
     }
 
     /* Player — bright cyan 3×3 rect at map centre */
