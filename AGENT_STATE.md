@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Item 22 — Lictors (elite aggressive interceptor saucers, Zone 4+, beat-accelerator)
+- **Locked Files**: src/enemy_lictor.c, include/enemy_lictor.h, src/game.c, Makefile, todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
