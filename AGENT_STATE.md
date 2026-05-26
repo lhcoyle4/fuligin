@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Parallel: (26) Cugel-9 board computer text log + (31) CRT glass curvature corner reflections
-- **Locked Files**: src/cugel9.c, include/cugel9.h, src/vector_graphics.c, include/vector_graphics.h, src/game.c, include/game.h, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -46,3 +46,4 @@
 | Claude | Asteroid Bowling Combos: bowling_timer fragments chain into rocks, STRIKE! float + score multiplier per chain depth | agent/claude | 2026-05-25 |
 | Claude | UI Overhaul Foundation: ui_panel_terminal() + ui_panel_menu() primitives; all 12 ui_panel() calls across menus/overlays/minimap replaced with terminal variant | agent/claude | 2026-05-25 |
 | Claude | HUD panel geometry (item 2): all 3 render_hud() panels converted to ui_panel_terminal(); fix duplicate-symbol linker error (state.c/game.c extern split) | agent/claude | 2026-05-25 |
+| Claude | Cugel-9 board computer (item 26): committed concurrent-agent inline cugel9_say() implementation (6 narrative call sites); parallel external module discarded to avoid dual-render | agent/claude | 2026-05-25 |

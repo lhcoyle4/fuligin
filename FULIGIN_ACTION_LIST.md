@@ -83,7 +83,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 ## 🔵 Lore / UI Features
 
-**26. Cugel-9 board computer** *(terminal style)* — HUD text log panel using `ui_panel_terminal()`. Format: `[CUGEL-9]: STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE.` — monospace, dim cyan label, ghost white body text. Plus TTS using sad/melancholic robot voice. Reference: `FULIGIN_Guide.pdf` p.2 lore text style (italic monospace blockquote).
+**26. Cugel-9 board computer** ✅ [DONE] *(terminal style)* — HUD text log panel using `ui_panel_terminal()`. Format: `[CUGEL-9]: STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE.` — monospace, dim cyan label, ghost white body text. Plus TTS using sad/melancholic robot voice. Reference: `FULIGIN_Guide.pdf` p.2 lore text style (italic monospace blockquote).
 
 **27. Pet shield drone chatter** *(terminal style)* — Tiny `Share Tech Mono` text floats above orbital drones: `[HELP]`, `"TARGET: BIG ROCK"`, `"SHIELD AT 24%"`. Low-contrast cyan.
 

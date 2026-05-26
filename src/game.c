@@ -668,6 +668,21 @@ static int   bowling_chain_count = 0;
 static float bowling_chain_timer = 0.0f;
 static int   g_bowling_next_spawn = 0; /* when 1, next spawn_asteroid() marks slot as bowling */
 
+/* ── Cugel-9 board computer (item 26) ──────────────────────────────────
+ * A circular buffer of melancholic robot commentary displayed in a
+ * ui_panel_terminal() strip just above the bottom HUD panels.
+ * Format on screen: [CUGEL-9]: <message body>
+ * Messages fade in over CUGEL9_FADE_DUR, stay, then fade out. */
+#define CUGEL9_MAX_MSGS  4
+#define CUGEL9_MSG_LEN   72
+#define CUGEL9_SHOW_DUR  3.5f    /* seconds fully visible              */
+#define CUGEL9_FADE_DUR  0.35f   /* fade-in / fade-out each            */
+
+typedef struct { char text[CUGEL9_MSG_LEN]; float timer; } Cugel9Msg;
+static Cugel9Msg cugel9_buf[CUGEL9_MAX_MSGS];
+static int       cugel9_head     = 0;    /* next write slot (circular) */
+static float     cugel9_cooldown = 0.0f; /* debounce between messages  */
+
 /* --- Score floaters --- */
 static ScoreFloat score_floats[MAX_SCORE_FLOATS];
 
@@ -710,6 +725,7 @@ extern int  settings_dynamic_range;
 extern int  settings_mute_unfocused;
 static int settings_fullscreen       = 0;
 static int settings_glow             = 3;  /* 0=OFF 1=LOW 2=MED 3=HIGH 4=MAX */
+static int settings_crt_curve        = 0;  /* CRT glass curvature — off by default (item 31) */
 extern int  settings_tab;               /* 0=VIDEO 1=AUDIO 2=GAMEPLAY 3=CONTROLS */
 static int settings_screen_shake     = 1;
 static int settings_show_fps         = 0;
@@ -1560,6 +1576,18 @@ static void init_home_area(void)
  *    Size 6:    Eldritch Tendril (Zone 2+) — drift-sinusoidal pursuer
  *    Size 7:    Daemon Sigil    (Zone 3+) — teleport-lurching horror
  *  Spawns UFO_SPAWN_RING_MIN to UFO_SPAWN_RING_MAX units from the Autodyne. */
+/* Enqueue a Cugel-9 message. Silently drops if cooldown is active. */
+static void cugel9_say(const char *msg)
+{
+    if (cugel9_cooldown > 0.0f) return;
+    Cugel9Msg *m = &cugel9_buf[cugel9_head];
+    strncpy(m->text, msg, CUGEL9_MSG_LEN - 1);
+    m->text[CUGEL9_MSG_LEN - 1] = '\0';
+    m->timer        = CUGEL9_SHOW_DUR + 2.0f * CUGEL9_FADE_DUR;
+    cugel9_head     = (cugel9_head + 1) % CUGEL9_MAX_MSGS;
+    cugel9_cooldown = 1.2f; /* 1.2 s before another message is accepted */
+}
+
 static void spawn_ufo(void)
 {
     ufo.active = 1;
@@ -1650,6 +1678,7 @@ static void trigger_hyperspace(void)
         player_death_pos   = player.pos;
         player_death_angle = player.angle;
         player_death_timer = 1.8f;
+        cugel9_say("HYPERSPACE MALFUNCTION. IN RETROSPECT: SHOULD HAVE CHECKED THAT.");
         lives--;
         if (lives <= 0) {
             game_state = STATE_GAMEOVER;
@@ -1901,6 +1930,7 @@ static void start_next_level()
 
     level_start_timer = 1.5f;
     ufo_spawn_timer   = 15.0f + ((float)rand() / RAND_MAX) * 15.0f;
+    cugel9_say("SECTOR SCAN COMPLETE. THREATS IDENTIFIED. SURVIVAL ODDS: CLASSIFIED.");
 }
 
 /** @brief Full reset of all game state for a new run.
@@ -1928,6 +1958,8 @@ static void start_new_game()
     combo_count         = 0;
     combo_timer         = 0.0f;
     bowling_chain_count = 0;
+    for (int ci = 0; ci < CUGEL9_MAX_MSGS; ci++) cugel9_buf[ci].timer = 0.0f;
+    cugel9_head = 0; cugel9_cooldown = 0.0f;
     bowling_chain_timer = 0.0f;
     for (int i = 0; i < MAX_ASTEROIDS; i++) bowling_timer[i] = 0.0f;
     ufo.active  = 0;
@@ -3193,6 +3225,7 @@ static void update_player_physics(float dt)
             if (drift_penalty_timer >= FUEL_DRIFT_PENALTY_TIME) {
                 drift_penalty_timer = 0.0f;
                 fuel_current = fuel_max * FUEL_DRIFT_RESERVE;
+                cugel9_say("HULL BREACH. EMERGENCY RESERVE ACTIVATED. LOGGING: PILOT ERROR.");
                 lives--;
                 spawn_event_float(player.pos.x, player.pos.y - 32.0f,
                                   "HULL BREACH",
@@ -4387,6 +4420,7 @@ static void update_collisions(float dt)
             spawn_particles(player.pos, 35, (SDL_Color){255, 200, 100, 255});
             spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                               "HIT", HUD_CINNABAR);
+            cugel9_say("STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE.");
 
             /* Stone splits on impact */
             asteroids[a].active = 0;
@@ -4430,6 +4464,7 @@ static void update_collisions(float dt)
                 spawn_particles(ufo.pos,    25, (SDL_Color){255, 180,  50, 255});
                 spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                                   "HIT", HUD_CINNABAR);
+                cugel9_say("DIRECT IMPACT DETECTED. RECORDING FINAL MOMENTS FOR POSTERITY.");
                 lives--;
                 if (lives <= 0) game_state = STATE_GAMEOVER;
                 ufo_spawn_timer = 20.0f + ((float)rand() / RAND_MAX) * 15.0f;
@@ -4504,6 +4539,15 @@ static void update_collisions(float dt)
             bowling_chain_timer -= dt;
             if (bowling_chain_timer <= 0.0f) bowling_chain_count = 0;
         }
+
+        /* ── Cugel-9 message timer tick ── */
+        for (int ci = 0; ci < CUGEL9_MAX_MSGS; ci++) {
+            if (cugel9_buf[ci].timer > 0.0f) {
+                cugel9_buf[ci].timer -= dt;
+                if (cugel9_buf[ci].timer < 0.0f) cugel9_buf[ci].timer = 0.0f;
+            }
+        }
+        if (cugel9_cooldown > 0.0f) cugel9_cooldown -= dt;
 
         for (int ba = 0; ba < MAX_ASTEROIDS; ba++) {
             if (!asteroids[ba].active) continue;
@@ -4582,8 +4626,10 @@ static void update_spawning(float dt)
     /* UFO spawn timer */
     if (!ufo.active) {
         ufo_spawn_timer -= dt;
-        if (ufo_spawn_timer <= 0.0f)
+        if (ufo_spawn_timer <= 0.0f) {
             spawn_ufo();
+            cugel9_say("CACOGEN VESSEL INBOUND. EVASIVE ACTION ADVISED. OR DON'T.");
+        }
     }
 
     /* Activate the Anomalous Void Rift at player level 4+ */
@@ -5831,6 +5877,51 @@ static void render_hud(void)
         (void)iy;
     }
 
+    /* ── Cugel-9 board computer log panel ─────────────────────────────
+     * Shows the most recently posted message in a terminal panel strip
+     * positioned just above the bottom HUD panels.
+     * Fade-in over CUGEL9_FADE_DUR, stay for CUGEL9_SHOW_DUR, fade out. */
+    if (game_state == STATE_PLAYING || game_state == STATE_ATTRACT_GAMEPLAY) {
+        /* Find the message with the most remaining timer (= most recent) */
+        int   best   = -1;
+        float best_t = 0.0f;
+        for (int ci = 0; ci < CUGEL9_MAX_MSGS; ci++) {
+            if (cugel9_buf[ci].timer > best_t) {
+                best_t = cugel9_buf[ci].timer;
+                best   = ci;
+            }
+        }
+        if (best >= 0) {
+            Cugel9Msg *cm   = &cugel9_buf[best];
+            float      total = CUGEL9_SHOW_DUR + 2.0f * CUGEL9_FADE_DUR;
+            float      age   = total - cm->timer;  /* 0 at post → grows */
+            float      alpha;
+            if      (age    < CUGEL9_FADE_DUR) alpha = age / CUGEL9_FADE_DUR;
+            else if (cm->timer < CUGEL9_FADE_DUR) alpha = cm->timer / CUGEL9_FADE_DUR;
+            else                                   alpha = 1.0f;
+            if (alpha < 0.0f) alpha = 0.0f;
+            if (alpha > 1.0f) alpha = 1.0f;
+
+            /* Panel geometry — centered strip just above bottom panels */
+            float cpw = 580.0f;
+            float cpx = (SCREEN_WIDTH  - cpw) * 0.5f;
+            float cph = 32.0f;
+            float cpy = (float)(SCREEN_HEIGHT - 90 - HUD_MARGIN_Y) - cph - 10.0f;
+
+            SDL_Color cac = HUD_TEXT_CYAN;
+            cac.a = (Uint8)(180.0f * alpha);
+            ui_panel_terminal(g_renderer, cpx, cpy, cpw, cph, cac);
+
+            /* Row: "[CUGEL-9]:" dim label + message body in primary white */
+            float rly = cpy + (cph - 10.0f) * 0.5f;
+            SDL_Color clc = HUD_TEXT_DIM;     clc.a = (Uint8)(200.0f * alpha);
+            SDL_Color cbc = HUD_TEXT_PRIMARY; cbc.a = (Uint8)(230.0f * alpha);
+            SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+            vf_draw_string("[CUGEL-9]:", cpx + 8.0f,   rly, 8, clc);
+            vf_draw_string(cm->text,     cpx + 104.0f,  rly, 8, cbc);
+        }
+    }
+
     /* FPS counter */
     if (settings_show_fps) {
         sprintf(hud_text, "%d FPS", fps_display_val);
@@ -7043,6 +7134,56 @@ static void render_menus(void)
     }
 }
 
+/* =========== CRT GLASS CURVATURE OVERLAY =========== */
+
+/**
+ * @brief Render a CRT glass faceplate overlay when settings_crt_curve is on.
+ *
+ * Draws 14 edge-darkening strips (quadratic alpha) and 40 per-corner glare
+ * diagonals using plain SDL2 draw calls on g_renderer.  This runs entirely
+ * in game.c so vector_graphics.c does not need to be touched.
+ *
+ * Call this after all game/HUD/menu layers, immediately before vg_present().
+ */
+static void render_crt_glass(void)
+{
+    const int W = SCREEN_WIDTH;
+    const int H = SCREEN_HEIGHT;
+
+    SDL_BlendMode old_blend;
+    SDL_GetRenderDrawBlendMode(g_renderer, &old_blend);
+    SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+
+    /* --- Edge-darkening vignette: 14 strips, quadratic fade inward --- */
+    for (int i = 0; i < 14; i++) {
+        float t   = 1.0f - (float)i / 14.0f;
+        Uint8 a   = (Uint8)(160.0f * t * t);   /* quadratic — heaviest at edge */
+        SDL_SetRenderDrawColor(g_renderer, 0, 0, 0, a);
+        int d = i * 3;                          /* 3 px between strips → 42 px zone */
+        SDL_Rect top = { 0,       d,       W, 1 };
+        SDL_Rect bot = { 0,       H-1-d,   W, 1 };
+        SDL_Rect lft = { d,       0,       1, H };
+        SDL_Rect rgt = { W-1-d,   0,       1, H };
+        SDL_RenderFillRect(g_renderer, &top);
+        SDL_RenderFillRect(g_renderer, &bot);
+        SDL_RenderFillRect(g_renderer, &lft);
+        SDL_RenderFillRect(g_renderer, &rgt);
+    }
+
+    /* --- Corner glare: 40 diagonal lines fading outward from each corner --- */
+    for (int i = 0; i < 40; i++) {
+        Uint8 a = (Uint8)(28.0f * (1.0f - (float)i / 40.0f));
+        SDL_SetRenderDrawColor(g_renderer, 220, 235, 255, a);
+        int s = i * 4;
+        SDL_RenderDrawLine(g_renderer, 0,     s,     s,     0    ); /* top-left    */
+        SDL_RenderDrawLine(g_renderer, W-1-s, 0,     W-1,   s    ); /* top-right   */
+        SDL_RenderDrawLine(g_renderer, 0,     H-1-s, s,     H-1  ); /* bottom-left */
+        SDL_RenderDrawLine(g_renderer, W-1-s, H-1,   W-1,   H-1-s); /* bottom-right*/
+    }
+
+    SDL_SetRenderDrawBlendMode(g_renderer, old_blend);
+}
+
 /* =========== MAIN RENDER ENTRY POINT =========== */
 
 /**
@@ -7087,5 +7228,7 @@ void game_render(void)
     vg_set_camera((Vec2){0.0f, 0.0f});
     render_menus();
     vg_draw_hyperjump_flash(hyperjump_flash_timer);
+    /* CRT glass curvature faceplate overlay — renders last, above all layers */
+    if (settings_crt_curve) render_crt_glass();
     vg_present();
 }
