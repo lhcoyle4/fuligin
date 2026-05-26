@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Center startup splash text + small minimap visibility tweak (UI priority queue)
+- **Locked Files**: src/game.c, src/ui_hud.c, AGENT_STATE.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
