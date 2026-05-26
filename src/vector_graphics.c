@@ -455,3 +455,28 @@ void vg_present(void)
     /* If no persistence_tex, drawing went directly to the screen — just present. */
     SDL_RenderPresent(vg_renderer);
 }
+
+void vg_draw_hyperjump_flash(float intensity)
+{
+    if (intensity <= 0.01f) return;
+
+    if (persistence_tex) {
+        SDL_SetRenderTarget(vg_renderer, persistence_tex);
+    }
+    
+    SDL_SetRenderDrawBlendMode(vg_renderer, SDL_BLENDMODE_ADD);
+
+    int alpha = (int)(intensity * 255.0f);
+    if (alpha > 255) alpha = 255;
+    if (alpha < 0) alpha = 0;
+
+    SDL_SetRenderDrawColor(vg_renderer, alpha, alpha, alpha, alpha);
+
+    SDL_Rect rect = {0, 0, win_w, win_h};
+    SDL_RenderFillRect(vg_renderer, &rect);
+
+    SDL_SetRenderDrawBlendMode(vg_renderer, SDL_BLENDMODE_BLEND);
+    if (persistence_tex) {
+        SDL_SetRenderTarget(vg_renderer, NULL);
+    }
+}

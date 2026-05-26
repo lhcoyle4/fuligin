@@ -168,4 +168,6 @@ void vg_set_chromatic_aberration(float strength);
  */
 void vg_present(void);
 
+void vg_draw_hyperjump_flash(float intensity);
+
 #endif /* VECTOR_GRAPHICS_H */
