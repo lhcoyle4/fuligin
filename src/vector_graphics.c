@@ -51,9 +51,14 @@ static PhosLine phos_lines[PHOS_TRAIL_LEN];
 static int phos_head = 0;
 
 /*
- * Screen-shake displacement applied during coordinate translation.
- * Kept in the module-state section so they are visible alongside the
- * other globals that affect rendering.
+ * Screen-shake displacement applied during vg_present() blitting.
+ * Set via vg_set_shake(); reset each frame by calling vg_set_shake(0,0).
+ */
+static int shake_dx = 0;
+static int shake_dy = 0;
+
+/*
+ * Camera world-space offset applied during coordinate translation.
  */
 static float g_camera_offset_x = 0.0f;
 static float g_camera_offset_y = 0.0f;
@@ -110,6 +115,20 @@ void vg_init(SDL_Renderer *renderer, int width, int height)
 void vg_set_camera(Vec2 offset)
 {
     vg_camera_offset = offset;
+}
+
+/**
+ * @brief Set the screen-shake pixel offset applied during vg_present() blitting.
+ *
+ * Pass (0, 0) to cancel shake.
+ *
+ * @param dx  Horizontal shake displacement in pixels.
+ * @param dy  Vertical shake displacement in pixels.
+ */
+void vg_set_shake(int dx, int dy)
+{
+    shake_dx = dx;
+    shake_dy = dy;
 }
 
 /**
@@ -443,20 +462,6 @@ void vg_clear(void)
         SDL_SetRenderDrawColor(vg_renderer, 0, 0, 0, 255);
         SDL_RenderClear(vg_renderer);
     }
-}
-
-/**
- * @brief Set the screen-shake displacement applied during coordinate translation.
- *
- * Call vg_set_shake(0, 0) to cancel.
- *
- * @param dx  Horizontal displacement in pixels.
- * @param dy  Vertical displacement in pixels.
- */
-void vg_set_shake(int dx, int dy)
-{
-    g_camera_offset_x = (float)dx;
-    g_camera_offset_y = (float)dy;
 }
 
 /* ====== PRESENTATION ====== */
