@@ -45,3 +45,4 @@
 | Claude | Fuel Clock: passive reactor drain + Emergency Drift Mode (thrust block, hull breach at 10s) | agent/claude | 2026-05-25 |
 | Claude | Asteroid Bowling Combos: bowling_timer fragments chain into rocks, STRIKE! float + score multiplier per chain depth | agent/claude | 2026-05-25 |
 | Claude | UI Overhaul Foundation: ui_panel_terminal() + ui_panel_menu() primitives; all 12 ui_panel() calls across menus/overlays/minimap replaced with terminal variant | agent/claude | 2026-05-25 |
+| Claude | HUD panel geometry (item 2): all 3 render_hud() panels converted to ui_panel_terminal(); fix duplicate-symbol linker error (state.c/game.c extern split) | agent/claude | 2026-05-25 |
