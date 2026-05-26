@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Integrate Item 25 EMP Sentinels — wire enemy_emp_sentinel.[ch] module into game.c, add player.emp_lock_timer field, input suppression while locked, Zone 2+ spawn pacing
+- **Locked Files**: src/game.c, include/entities.h, include/enemy_emp_sentinel.h, src/enemy_emp_sentinel.c, Makefile, todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
