@@ -689,9 +689,17 @@ static ScoreFloat score_floats[MAX_SCORE_FLOATS];
 /* --- Event text floaters (CRIT!, STRIKE!, HIT, VENT!) --- */
 static EventFloat event_floats[MAX_EVENT_FLOATS];
 
-/* --- Upgrade selection --- */
-static UpgradeType upgrade_options[3];
-static int         selected_option = 0;
+/* --- Upgrade selection ---
+ * Narrow extern: these globals are defined in src/state.c and read by both
+ * game.c (input handler at STATE_UPGRADE_SELECT) and ui_hud.c (renderer).
+ * Sharing the same memory across translation units is what fixes the bug
+ * where the powerup cursor visually never advanced and Enter selected a
+ * stale option.  We can't include state.h because it currently re-declares
+ * game.c's entire data model and has a syntax error at line 223; once the
+ * state.h refactor is finished, this pair of declarations can be deleted in
+ * favour of the full include. */
+extern UpgradeType upgrade_options[3];
+extern int         selected_option;
 
 /* --- Camera & world --- */
 static Vec2  camera_pos        = {0.0f, 0.0f};
