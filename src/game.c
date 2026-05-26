@@ -771,6 +771,7 @@ static float twin_stick_fire_angle  = 0.0f;
 static int   twin_stick_fire_active = 0;
 
 /* --- Resource system --- */
+static int res_void_stone     = 0;
 static int res_void_steel     = 0;
 static int res_autodyne_frags = 0;
 static int res_hex_modules    = 0;
@@ -842,6 +843,22 @@ static float respawn_blink = 0.0f;
 
 /* --- Cached asteroid count (written by update_asteroids, read by update_spawning) --- */
 static int cached_active_asteroids = 0;
+
+/* --- Void Stone Mechanics --- */
+static int time_stop_frames = 0;
+#define POS_HISTORY_LEN 100
+static Vec2 player_pos_history[POS_HISTORY_LEN];
+static int pos_history_idx = 0;
+static int check_void_stone(void) {
+    if (lives <= 1 && res_void_stone > 0) {
+        res_void_stone--;
+        time_stop_frames = 30;
+        player.pos = player_pos_history[(pos_history_idx + POS_HISTORY_LEN - 100) % POS_HISTORY_LEN];
+        player.invuln_timer = 2.0f;
+        return 1;
+    }
+    return 0;
+}
 
 /* =========== FORWARD DECLARATIONS =========== */
 
@@ -1622,6 +1639,7 @@ static void trigger_hyperspace(void)
 
     /* Catastrophic misalignment — FULIGIN classic risk */
     if (((float)rand() / RAND_MAX) < HYPERSPACE_DEATH_CHANCE) {
+        if (check_void_stone()) return;
         player.active = 0;
         audio_play(SFX_EXPLOSION_LG);
         spawn_particles(player.pos, 30, (SDL_Color){255, 100, 100, 255});
@@ -4338,6 +4356,8 @@ static void update_collisions(float dt)
                 continue;
             }
 
+            if (check_void_stone()) continue;
+
             /* Player destroyed */
             player.active = 0;
             audio_play(SFX_EXPLOSION_LG);
@@ -4428,6 +4448,7 @@ static void update_collisions(float dt)
                 } else {
                     /* No defence: player dies */
                     ufo_bullets[b].active = 0;
+                    if (check_void_stone()) continue;
                     player.active         = 0;
                     audio_play(SFX_EXPLOSION_LG);
                     audio_stop(SFX_THRUST);
@@ -4827,6 +4848,17 @@ void game_update(float dt)
         /* Keep audio and camera coherent even on menus / paused states */
         update_camera_and_audio(dt);
         return;
+    }
+
+    /* ── Void Stone Mechanics ─────────────────────────────────────── */
+    if (time_stop_frames > 0) {
+        time_stop_frames--;
+        update_camera_and_audio(dt);
+        return;
+    }
+    if (player.active) {
+        player_pos_history[pos_history_idx] = player.pos;
+        pos_history_idx = (pos_history_idx + 1) % POS_HISTORY_LEN;
     }
 
     /* ── Full simulation tick ─────────────────────────────────────── */
