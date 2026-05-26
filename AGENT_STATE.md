@@ -2,11 +2,11 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
-- **Last Updated**: 2026-05-25
+- **Active Task**: Integrate drone_chatter module (Item 27 — Pet shield drone chatter)
+- **Locked Files**: src/game.c, Makefile, src/drone_chatter.c, include/drone_chatter.h
+- **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
 - **Status**: Idle
