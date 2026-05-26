@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Item 25 — EMP Sentinels (new enemy module with EM-pulse status effect on player)
+- **Locked Files**: src/enemy_emp_sentinel.c (new), include/enemy_emp_sentinel.h (new), src/game.c, Makefile, include/state.h
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
