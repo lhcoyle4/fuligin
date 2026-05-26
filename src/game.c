@@ -702,14 +702,15 @@ static int      menu_selection    = 0;   /* 0=Start  1=High Scores  2=Settings *
 static GameState settings_back_state = STATE_TITLE;
 
 /* --- Settings --- */
-int  settings_volume          = 100;
-int  settings_sfx_vol         = 100;
-int  settings_music_vol       = 400;
-int  settings_dynamic_range   = 1;
-int  settings_mute_unfocused  = 1;
+/* Definitions live in state.c (shared state module); extern here to avoid duplicate symbols */
+extern int  settings_volume;
+extern int  settings_sfx_vol;
+extern int  settings_music_vol;
+extern int  settings_dynamic_range;
+extern int  settings_mute_unfocused;
 static int settings_fullscreen       = 0;
 static int settings_glow             = 3;  /* 0=OFF 1=LOW 2=MED 3=HIGH 4=MAX */
-int       settings_tab               = 0;  /* 0=VIDEO 1=AUDIO 2=GAMEPLAY 3=CONTROLS (now 0..8) */
+extern int  settings_tab;               /* 0=VIDEO 1=AUDIO 2=GAMEPLAY 3=CONTROLS */
 static int settings_screen_shake     = 1;
 static int settings_show_fps         = 0;
 static int settings_mouse_aim        = 1;
@@ -720,11 +721,10 @@ static int settings_invert_y         = 0;
 static int settings_control_scheme   = 1;  /* 0=ARCADE  1=TWIN_STICK */
 
 /* --- New unified settings (FF7R/CoQ HUD overhaul) --- */
-Settings  g_settings;
-int       settings_row              = 0;
-int       settings_keybind_pending  = -1;
-uint32_t  g_world_seed              = 0;
-/* Note: settings_tab already declared above as static int settings_tab = 0 */
+extern Settings  g_settings;
+extern int       settings_row;
+extern int       settings_keybind_pending;
+extern uint32_t  g_world_seed;
 
 /* --- Key binds --- */
 static SDL_Scancode keybinds[KB_COUNT] = {
@@ -5660,17 +5660,17 @@ static void render_hud(void)
     ui_particle_drift(g_renderer, game_time, 0); /* no-op, kept for branch parity */
 
     /* ================================================================
-     * TOP-LEFT PANEL — [SCORE] / ZONE / COMBO  (FF7R angled cut)
+     * TOP-LEFT PANEL — [SCORE] / ZONE / COMBO  (terminal style)
      * ================================================================ */
     {
         float px = HUD_TL_X, py = HUD_TL_Y, pw = HUD_TL_W, ph = HUD_TL_H;
         float pad = HUD_PAD_INNER;
 
-        ui_panel_angled(g_renderer, px, py, pw, ph, HUD_TL_CUT, zone_color);
+        ui_panel_terminal(g_renderer, px, py, pw, ph, zone_color);
 
         /* Row 1: [SCORE] label + score value */
         float row1_y = py + pad;
-        vf_draw_string("[SCORE]", px + pad + HUD_TL_CUT, row1_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[SCORE]", px + pad, row1_y, 9, HUD_TEXT_DIM);
         sprintf(hud_text, "%08d", score);
         {
             float tw = (float)strlen(hud_text) * 9.0f * 1.1f;
@@ -5689,37 +5689,37 @@ static void render_hud(void)
             "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
         };
         float row2_y = sep_y + 5.0f;
-        vf_draw_string("ZONE:", px + pad + HUD_TL_CUT, row2_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("ZONE:", px + pad, row2_y, 9, HUD_TEXT_DIM);
         vf_draw_string(tl_zone_names[player_zone],
-                       px + pad + HUD_TL_CUT + 42.0f, row2_y, 9, zone_color);
+                       px + pad + 42.0f, row2_y, 9, zone_color);
         sprintf(hud_text, "LVL:%d", player_level);
         vf_draw_string(hud_text, px + pw - pad - 42.0f, row2_y, 9, HUD_TEXT_DIM);
 
         /* Row 3: COMBO */
         float row3_y = row2_y + HUD_ROW_H + 2.0f;
-        ui_combo_multiplier(g_renderer, px + pad + HUD_TL_CUT, row3_y, combo_count, combo_timer);
+        ui_combo_multiplier(g_renderer, px + pad, row3_y, combo_count, combo_timer);
     }
 
     /* ================================================================
-     * BOTTOM-LEFT PANEL — [HULL] / [CHRON] / [LIVES]  (FF7R angled)
+     * BOTTOM-LEFT PANEL — [HULL] / [CHRON] / [LIVES]  (terminal style)
      * ================================================================ */
     {
         float px = HUD_BL_X, py = HUD_BL_Y, pw = HUD_BL_W, ph = HUD_BL_H;
         float pad = HUD_PAD_INNER;
 
-        ui_panel_angled(g_renderer, px, py, pw, ph, HUD_BL_CUT, zone_color);
+        ui_panel_terminal(g_renderer, px, py, pw, ph, zone_color);
 
-        float bar_x = px + pad + HUD_BL_CUT + 48.0f;
+        float bar_x = px + pad + 48.0f;
         float bar_w = pw - (bar_x - px) - pad;
 
         /* Row 1: [HULL] — placeholder solid bar (no HP struct yet) */
         float row1_y = py + pad;
-        vf_draw_string("[HULL]", px + pad + HUD_BL_CUT, row1_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[HULL]", px + pad, row1_y, 9, HUD_TEXT_DIM);
         ui_bar(g_renderer, bar_x, row1_y, bar_w, 8.0f, 1.0f, 1.0f, HUD_TEAL);
 
         /* Row 2: [CHRON] segmented XP bar */
         float row2_y = row1_y + HUD_ROW_H + 4.0f;
-        vf_draw_string("[CHRON]", px + pad + HUD_BL_CUT, row2_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[CHRON]", px + pad, row2_y, 9, HUD_TEXT_DIM);
         SDL_Color xp_fill = HUD_GOLD_BAR;
         if (xp_flash_timer > 0.0f && ((int)(xp_flash_timer * 20) % 2 == 0))
             xp_fill = HUD_TEXT_PRIMARY;
@@ -5733,7 +5733,7 @@ static void render_hud(void)
 
         /* Row 3: [LIVES] — ship glyphs */
         float row3_y = row2_y + HUD_ROW_H + 4.0f;
-        vf_draw_string("[LIVES]", px + pad + HUD_BL_CUT, row3_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[LIVES]", px + pad, row3_y, 9, HUD_TEXT_DIM);
         {
             SDL_Color ship_col = HUD_TEXT_CYAN;
             Shape s = {ship_lines, sizeof(ship_lines) / sizeof(Line), ship_col};
@@ -5748,22 +5748,22 @@ static void render_hud(void)
     }
 
     /* ================================================================
-     * BOTTOM-RIGHT PANEL — [FUEL] / [ZONE] / [AMMO]  (FF7R angled)
+     * BOTTOM-RIGHT PANEL — [FUEL] / [ZONE] / [AMMO]  (terminal style — Qud/Noctis)
      * ================================================================ */
     {
         float px = HUD_BR_X, py = HUD_BR_Y, pw = HUD_BR_W, ph = HUD_BR_H;
         float pad = HUD_PAD_INNER;
 
-        ui_panel_angled(g_renderer, px, py, pw, ph, HUD_BR_CUT, zone_color);
+        ui_panel_terminal(g_renderer, px, py, pw, ph, zone_color);
 
-        float bar_x = px + pad + HUD_BR_CUT + 48.0f;
+        float bar_x = px + pad + 48.0f;
         float bar_w = pw - (bar_x - px) - pad;
 
         /* Row 1: [FUEL] bar + percent */
         float row1_y = py + pad;
         float fpct = (fuel_max > 0.0f) ? (fuel_current / fuel_max) : 0.0f;
         SDL_Color fc = ui_fuel_color(fpct);
-        vf_draw_string("[FUEL]", px + pad + HUD_BR_CUT, row1_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[FUEL]", px + pad, row1_y, 9, HUD_TEXT_DIM);
         ui_bar(g_renderer, bar_x, row1_y, bar_w, 8.0f, fuel_current, fuel_max, fc);
         sprintf(hud_text, "%d%%", (int)(fpct * 100.0f));
         {
@@ -5776,19 +5776,19 @@ static void render_hud(void)
             "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
         };
         float row2_y = row1_y + HUD_ROW_H + 4.0f;
-        vf_draw_string("[ZONE]", px + pad + HUD_BR_CUT, row2_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[ZONE]", px + pad, row2_y, 9, HUD_TEXT_DIM);
         vf_draw_string(br_zone_names[player_zone], bar_x, row2_y, 9, zone_color);
 
         /* Row 3: [AMMO] block bar */
         float row3_y = row2_y + HUD_ROW_H + 4.0f;
-        vf_draw_string("[AMMO]", px + pad + HUD_BR_CUT, row3_y, 9, HUD_TEXT_DIM);
+        vf_draw_string("[AMMO]", px + pad, row3_y, 9, HUD_TEXT_DIM);
         ui_bar_block(g_renderer, bar_x, row3_y,
                      (float)res_ammo, 12.0f, 12, HUD_AMBER);
 
         /* Contraband warning */
         if (res_contraband > 0) {
             SDL_Color cb_warn = ui_pulse(HUD_CINNABAR, game_time, 2.0f, 0.4f);
-            vf_draw_string("CONTRABAND", px + pad + HUD_BR_CUT, row3_y, 7, cb_warn);
+            vf_draw_string("CONTRABAND", px + pad, row3_y, 7, cb_warn);
         }
     }
 

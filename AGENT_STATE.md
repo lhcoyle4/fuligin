@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: HUD panel geometry (item 2) — wrap score/fuel/ammo/chronicle/zone HUD panels in ui_panel_terminal()
-- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -45,3 +45,4 @@
 | Claude | Fuel Clock: passive reactor drain + Emergency Drift Mode (thrust block, hull breach at 10s) | agent/claude | 2026-05-25 |
 | Claude | Asteroid Bowling Combos: bowling_timer fragments chain into rocks, STRIKE! float + score multiplier per chain depth | agent/claude | 2026-05-25 |
 | Claude | UI Overhaul Foundation: ui_panel_terminal() + ui_panel_menu() primitives; all 12 ui_panel() calls across menus/overlays/minimap replaced with terminal variant | agent/claude | 2026-05-25 |
+| Claude | HUD panel geometry (item 2): all 3 render_hud() panels converted to ui_panel_terminal(); fix duplicate-symbol linker error (state.c/game.c extern split) | agent/claude | 2026-05-25 |
