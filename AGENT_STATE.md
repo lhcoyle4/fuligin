@@ -4,8 +4,8 @@
 ## Agent: Claude (Anthropic)
 - **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: Asteroid Bowling Combos (action list item 19) + mark todo #11 slingshot done
-- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
+- **Active Task**: UI overhaul foundation — ui_panel_terminal/ui_panel_menu primitives + retrofit HUD and top-level menus to unified Qud-terminal style; remove duplicate/off-style UI
+- **Locked Files**: src/ui.c, include/ui.h, src/game.c, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -43,3 +43,4 @@
 | Claude | Gravity Slingshot: tangential boost in rift close orbit (150-380u), GRAVITY ASSIST float | agent/claude | 2026-05-25 |
 | Claude | Mark items 3 (segmented bars), 4 (phosphor decay), 18 (slingshot) as done in action list | agent/claude | 2026-05-25 |
 | Claude | Fuel Clock: passive reactor drain + Emergency Drift Mode (thrust block, hull breach at 10s) | agent/claude | 2026-05-25 |
+| Claude | Asteroid Bowling Combos: bowling_timer fragments chain into rocks, STRIKE! float + score multiplier per chain depth | agent/claude | 2026-05-25 |

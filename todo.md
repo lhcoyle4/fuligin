@@ -110,7 +110,7 @@ Adapt Rogue's classic monster behaviors to space entities:
   - [ ] Docking lets the player trade forbidden Contraband resources, purchase secret coordinates, or play a quick vector-rendered roulette mini-game to double their Void Steel.
 
 ### 11. Gravitational Slingshot Boosts (Physics/Tactical)
-- [ ] **Gravity Assist Trajectories:** Allows the player to enter a close orbit around massive black-hole rifts or heavy planetoids, gaining a high-velocity speed boost (catapult effect) for zero fuel cost.
+- [x] **Gravity Assist Trajectories:** Allows the player to enter a close orbit around massive black-hole rifts or heavy planetoids, gaining a high-velocity speed boost (catapult effect) for zero fuel cost.
 
 ### 12. The Physical Bane-Whip (Weapon/Flashy)
 - [ ] **Kinetic Vector Whip:** An upgrade that tethers an elastic, segmented vector tail to the rear of the ship.
@@ -121,4 +121,4 @@ Adapt Rogue's classic monster behaviors to space entities:
   - [ ] E.g., `"COORDINATING..."`, `"SHIELD AT 24% (HELP)"`, `"TARGET DETECTED: BIG ROCK"`.
 
 ### 14. Asteroid Bowling Combo chains (Silly/Fun)
-- [ ] **Kinetic Launching:** Using heavy projectiles or gravity displacements to launch smaller asteroids into larger ones. Splintering a chain of rocks by bowling them into each other grants a special `"STRIKE!"` score float and multiplier.
+- [x] **Kinetic Launching:** Using heavy projectiles or gravity displacements to launch smaller asteroids into larger ones. Splintering a chain of rocks by bowling them into each other grants a special `"STRIKE!"` score float and multiplier.
