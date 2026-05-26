@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Fuel Clock / Reactor Drain (item 16)
+- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
