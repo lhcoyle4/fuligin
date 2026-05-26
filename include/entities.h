@@ -61,7 +61,8 @@
 /* Named zone radii (world units from origin) */
 #define ZONE_HOME_RADIUS         1000.0f  /* home zone — safe area near station */
 #define ZONE_INNER_RADIUS        3500.0f  /* inner belt — mid-difficulty band */
-#define ZONE_VOID_RADIUS         8000.0f  /* void zone — outer ring, maximum threat */
+#define ZONE_VOID_RADIUS         8000.0f  /* void zone — outer ring */
+#define ZONE_ABYSS_RADIUS       14000.0f  /* abyss outer boundary — beyond this is DEEP DRIFT (zone 4) */
 
 /* =========== ENUMERATIONS =========== */
 

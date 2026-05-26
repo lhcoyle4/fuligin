@@ -49,7 +49,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 ## 🟡 Gameplay Mechanics
 
-**13. Zone transition system** — Five zones (HOME STATION → SCRAP FIELDS → IRON SHOALS → VOID REACHES → DEEP DRIFT), danger/density scaling outward. Warp loci as fixed nav beacons. Zone entry triggers banner (item 8).
+**13. Zone transition system** ✅ [PARTIAL — five-zone scaffolding done] — Five zones now indexed 0-4. `get_zone()` returns 0-4 using new `ZONE_ABYSS_RADIUS` (14000u) as the boundary between THE ABYSS (zone 3) and DEEP DRIFT (zone 4). All zone-indexed arrays (`tl_zone_names`, `br_zone_names`, `mm_zn`, `zone_banner_names` in game.c + the 3 mirrors in ui_hud.c) extended to 5 entries with `"DEEP DRIFT"`. `HUD_ZONE_ACCENT[]` and `UI_ZONE_COLORS[]` extended to 5 entries; DEEP DRIFT accent is a bleached bone-white (220,215,190) reading as "light has drained out". `ui_zone_color()` clamp raised to 4. Beat-pulse vignette divisor updated 3.0f → 4.0f so the 0→1 ramp covers the new range. **Side effect: Item 22 Lictors (gated on `player_zone >= 4`) now actually spawn — previously dead-code path.** Warp loci as fixed nav beacons + zone-entry banner integration (item 8 already done) deferred; HUD_DESIGN_BRIEF.md sample array sizes also still say [4] but are doc-only. Lore-name alignment with action-list canonical names (HOME STATION / SCRAP FIELDS / IRON SHOALS / VOID REACHES / DEEP DRIFT) deferred — current code retains HOME SPACE / INNER BELT / DEEP VOID / THE ABYSS / DEEP DRIFT for backward compatibility with shipped saves and lore docs.
 
 **14. Proximity danger alert** *(terminal style)* ✅ [DONE] — Pulsing `>>> DANGER <<<` at bottom-center, CINNABAR, monospace. Matches the terminal bracket-flash style from `vibe_presentation.html`.
 

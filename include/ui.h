@@ -99,8 +99,8 @@
 #define HUD_BR_Y   (960 - HUD_BR_H - HUD_MARGIN_Y)
 #define HUD_BR_CUT  12
 
-/* Zone-indexed accent colors [HOME, INNER, DEEP, ABYSS] */
-extern const SDL_Color HUD_ZONE_ACCENT[4];
+/* Zone-indexed accent colors [HOME, INNER, DEEP, ABYSS, DRIFT] */
+extern const SDL_Color HUD_ZONE_ACCENT[5];
 
 /* =========================================================
  * DEPRECATED ALIASES — old UI_* names for backwards compatibility.
@@ -120,7 +120,7 @@ extern const SDL_Color HUD_ZONE_ACCENT[4];
 #define UI_GOLD        HUD_TEXT_GOLD
 
 /* Zone-indexed border colors (deprecated — use HUD_ZONE_ACCENT) */
-extern const SDL_Color UI_ZONE_COLORS[4];
+extern const SDL_Color UI_ZONE_COLORS[5];
 
 /* =========================================================
  * PANEL PRIMITIVES

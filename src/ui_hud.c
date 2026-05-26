@@ -439,7 +439,7 @@ void render_hud(void)
 
         /* Row 2: ZONE: name | LVL: N */
         static const char *tl_zone_names[] = {
-            "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
+            "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS", "DEEP DRIFT"
         };
         float row2_y = sep_y + 5.0f;
         vf_draw_string("ZONE:", px + pad + HUD_TL_CUT, row2_y, 9, HUD_TEXT_DIM);
@@ -526,7 +526,7 @@ void render_hud(void)
 
         /* Row 2: [ZONE] — zone name in zone accent color */
         static const char *br_zone_names[] = {
-            "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
+            "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS", "DEEP DRIFT"
         };
         float row2_y = row1_y + HUD_ROW_H + 4.0f;
         vf_draw_string("[ZONE]", px + pad + HUD_BR_CUT, row2_y, 9, HUD_TEXT_DIM);
@@ -716,7 +716,7 @@ void render_minimap(void)
 
     /* Zone label beneath map */
     static const char *mm_zn[] = {
-        "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS"
+        "HOME SPACE", "INNER BELT", "DEEP VOID", "THE ABYSS", "DEEP DRIFT"
     };
     vf_draw_string_centered(mm_zn[player_zone],
                             panel_x + panel_w * 0.5f,

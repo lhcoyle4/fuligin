@@ -71,21 +71,23 @@ static int      s_particles_ready = 0;
  * ========================================================= */
 
 /* HUD zone accent colors (new authoritative palette) */
-const SDL_Color HUD_ZONE_ACCENT[4] = {
+const SDL_Color HUD_ZONE_ACCENT[5] = {
     {  0, 180, 216, 200},  /* HOME SPACE  — Noctis teal   #00b4d8 */
     {  0, 140, 255, 200},  /* INNER BELT  — cool azure            */
     {160,  80, 255, 200},  /* DEEP VOID   — void purple           */
     {227,  66,  52, 220},  /* THE ABYSS   — cinnabar red          */
+    {220, 215, 190, 220},  /* DEEP DRIFT  — bone white, light bleached out */
 };
 
 /* Zone-indexed border colors (deprecated — use HUD_ZONE_ACCENT):
  *   0 = HOME SPACE (cyan), 1 = INNER BELT (blue), 2 = DEEP VOID (purple),
- *   3 = THE ABYSS (red) */
-const SDL_Color UI_ZONE_COLORS[4] = {
+ *   3 = THE ABYSS (red), 4 = DEEP DRIFT (bone) */
+const SDL_Color UI_ZONE_COLORS[5] = {
     {  80, 255, 255, 200 },   /* HOME SPACE  — URTH CYAN     */
     { 120, 180, 255, 200 },   /* INNER BELT  — cool blue     */
     { 180,  80, 255, 200 },   /* DEEP VOID   — void purple   */
-    { 255,  80,  80, 200 }    /* THE ABYSS   — Cinnabar red  */
+    { 255,  80,  80, 200 },   /* THE ABYSS   — Cinnabar red  */
+    { 220, 215, 190, 200 }    /* DEEP DRIFT  — bone white    */
 };
 
 /* =========================================================
@@ -828,12 +830,13 @@ SDL_Color ui_fuel_color(float pct)
 }
 
 /**
- * @brief Return the zone accent color for zone index 0-3.
+ * @brief Return the zone accent color for zone index 0-4.
+ *        0=HOME SPACE, 1=INNER BELT, 2=DEEP VOID, 3=THE ABYSS, 4=DEEP DRIFT.
  */
 SDL_Color ui_zone_color(int zone)
 {
     if (zone < 0) { zone = 0; }
-    if (zone > 3) { zone = 3; }
+    if (zone > 4) { zone = 4; }
     return HUD_ZONE_ACCENT[zone];
 }
 
