@@ -201,6 +201,7 @@ typedef struct {
     float emp_lock_timer;          /* Item 25: EMP-locked seconds remaining     */
     float sensor_static_timer;     /* Status: sensor blackout (blindness) secs  */
     float reverse_drift_timer;     /* Status: thrust vector inverted (confusion)*/
+    float tox_hallucination_timer; /* Status: wireframe scramble (hallucination)*/
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */

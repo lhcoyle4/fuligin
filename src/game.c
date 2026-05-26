@@ -251,6 +251,7 @@ typedef struct {
     float emp_lock_timer;          /* Item 25: EMP-locked seconds remaining     */
     float sensor_static_timer;     /* Status: sensor blackout (blindness) secs  */
     float reverse_drift_timer;     /* Status: thrust vector inverted (confusion)*/
+    float tox_hallucination_timer; /* Status: wireframe scramble (hallucination)*/
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -778,6 +779,26 @@ static float sensor_static_roll_t = 0.0f;    /* countdown to next scramble roll 
 #define REVERSE_DRIFT_ROLL_MAX   8.5f   /* max seconds between confusion rolls*/
 #define REVERSE_DRIFT_HIT_CHANCE 0.30f  /* per-roll probability of confusion  */
 static float reverse_drift_roll_t = 0.0f;    /* countdown to next confusion roll */
+
+/* --- Tox-Gas Hallucinations (Confusion-Visual) status-malfunction state ---
+ * Third member of the Solar-Flare status-malfunction trio (alongside Sensor
+ * Static and Reverse Drift).  todo.md §6 spec: "Tox-Gas Hallucinations —
+ * Space sickness or reactor leaks scramble visual outlines, turning
+ * wireframes into shifting geometric patterns (e.g., rendering simple
+ * asteroids as elite Cacogens)."  Implementation: per-frame angle + radius
+ * jitter applied to every asteroid's draw transform plus a low-alpha cyan
+ * triangular "ghost-Cacogen" overlay on roughly one-third of the rocks,
+ * so simple medium-size asteroids LOOK like they could be UFOs at a
+ * glance.  Bounded entirely to render_entities() — no gameplay collision
+ * change.  Same Star-Shadow gating as #35/#36: hiding behind a big rock
+ * blocks the roll outright.  Tuned a touch milder than Sensor Static
+ * (3.0 s effect, 25 % hit chance, 5–9 s cadence) because purely visual
+ * confusion is less actionable than a sensor blackout. */
+#define TOX_HALLUCINATION_DURATION   3.0f /* seconds of wireframe scramble    */
+#define TOX_HALLUCINATION_ROLL_MIN   5.0f /* min seconds between halluc rolls */
+#define TOX_HALLUCINATION_ROLL_MAX   9.0f /* max seconds between halluc rolls */
+#define TOX_HALLUCINATION_HIT_CHANCE 0.25f /* per-roll probability of halluc  */
+static float tox_hallucination_roll_t = 0.0f; /* countdown to next halluc roll */
 
 /* --- Screen shake --- */
 static float screen_shake_timer     = 0.0f;
@@ -1580,6 +1601,7 @@ static void reset_player(void)
     player.emp_lock_timer = 0.0f; /* Item 25: clear EMP lock on respawn */
     player.sensor_static_timer = 0.0f; /* Status: clear blindness on respawn */
     player.reverse_drift_timer = 0.0f; /* Status: clear confusion on respawn */
+    player.tox_hallucination_timer = 0.0f; /* Status: clear hallucination on respawn */
 }
 
 /* ----------- Zone Classification ----------- */
@@ -2250,6 +2272,7 @@ void game_init()
     player.emp_lock_timer = 0.0f;
     player.sensor_static_timer = 0.0f;
     player.reverse_drift_timer = 0.0f;
+    player.tox_hallucination_timer = 0.0f;
     player.trail_head = 0;
     for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
         player.trail_pos[i] = (Vec2){0.0f, 0.0f};
@@ -3287,6 +3310,18 @@ static void update_player_physics(float dt)
         if (player.reverse_drift_timer > 0.0f) {
             player.reverse_drift_timer -= dt;
             if (player.reverse_drift_timer < 0.0f) player.reverse_drift_timer = 0.0f;
+        }
+
+        /* ── Tox-Gas Hallucinations tick ────────────────────────────────
+         * Pure timer decay: input is NOT suppressed.  The asteroid render
+         * block jitters its draw transforms and overlays low-alpha
+         * ghost-Cacogen rings while the timer is positive, so the player
+         * sees a shifting, second-guessing wireframe field.  Triggered by
+         * unshielded solar flare exposure in update_progression() (same
+         * Star-Shadow gating as Sensor Static and Reverse Drift). */
+        if (player.tox_hallucination_timer > 0.0f) {
+            player.tox_hallucination_timer -= dt;
+            if (player.tox_hallucination_timer < 0.0f) player.tox_hallucination_timer = 0.0f;
         }
 
         /* ── Singularity Displacer: double-tap thrust to rift-jump ── */
@@ -5470,11 +5505,46 @@ static void update_progression(float dt)
             } else if (solar_flare_in_shadow) {
                 if (reverse_drift_roll_t < 1.0f) reverse_drift_roll_t = 1.0f;
             }
+            /* Tox-Gas Hallucinations roll: third member of the malfunction
+             * trio.  Same Star-Shadow gating as Sensor Static and Reverse
+             * Drift, but a lower hit rate and a longer cadence — the
+             * effect is purely visual (asteroid wireframes scramble +
+             * ghost-Cacogen overlays) so the pilot can compensate without
+             * mechanical penalty.  Tuning intent: the player should hit
+             * a hallucination roughly once per flare on average, not
+             * compound atop the other two malfunctions. */
+            if (solar_flare_in_shadow == 0
+                && player.tox_hallucination_timer <= 0.0f)
+            {
+                tox_hallucination_roll_t -= dt;
+                if (tox_hallucination_roll_t <= 0.0f) {
+                    float r = (float)rand() / (float)RAND_MAX;
+                    if (r < TOX_HALLUCINATION_HIT_CHANCE) {
+                        player.tox_hallucination_timer = TOX_HALLUCINATION_DURATION;
+                        spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                          "TOX HALLUCINATION",
+                                          (SDL_Color){HUD_CINNABAR.r,
+                                                      HUD_CINNABAR.g,
+                                                      HUD_CINNABAR.b, 255});
+                        cugel9_say("REACTOR FUMES DETECTED. THAT ASTEROID IS PROBABLY NOT A CACOGEN. PROBABLY.");
+                        audio_play(SFX_EXPLOSION_SM);
+                    }
+                    /* Re-arm the roll regardless of outcome */
+                    {
+                        float t = (float)rand() / (float)RAND_MAX;
+                        tox_hallucination_roll_t = TOX_HALLUCINATION_ROLL_MIN
+                            + t * (TOX_HALLUCINATION_ROLL_MAX - TOX_HALLUCINATION_ROLL_MIN);
+                    }
+                }
+            } else if (solar_flare_in_shadow) {
+                if (tox_hallucination_roll_t < 1.0f) tox_hallucination_roll_t = 1.0f;
+            }
             if (solar_flare_active_t <= 0.0f) {
                 solar_flare_active_t = 0.0f;
                 solar_flare_in_shadow = 0;
                 sensor_static_roll_t = 0.0f; /* reset between flare cycles */
                 reverse_drift_roll_t = 0.0f; /* reset between flare cycles */
+                tox_hallucination_roll_t = 0.0f; /* reset between flare cycles */
                 spawn_event_float(player.pos.x, player.pos.y - 32.0f,
                                   "FLARE PASSED",
                                   (SDL_Color){HUD_TEXT_CYAN.r,
@@ -6280,6 +6350,12 @@ static void render_entities(void)
     }
 
     /* ── Asteroids ──────────────────────────────────────────────── */
+    /* Tox-Gas Hallucination strength once per frame, used to gate the
+     * per-asteroid jitter+overlay block below.  Range: 0.0 (no effect) up
+     * to ~1.0 just after onset, fading linearly with the timer. */
+    float halluc_t  = player.tox_hallucination_timer;
+    float halluc_f  = (halluc_t > 0.0f) ? (halluc_t / TOX_HALLUCINATION_DURATION) : 0.0f;
+    if (halluc_f > 1.0f) halluc_f = 1.0f;
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
         if (!asteroids[i].active) continue;
         Shape s;
@@ -6291,7 +6367,66 @@ static void render_entities(void)
         vg_draw_shape_trail(&s, asteroids[i].trail_pos, asteroids[i].trail_ang,
                             PHOS_TRAIL_LEN, asteroids[i].trail_head,
                             1.0f, 0.5f, 0.8f);
-        vg_draw_shape(&s, asteroids[i].pos, asteroids[i].angle, 1.0f);
+
+        /* Tox-Gas Hallucinations: jitter draw transform when active.  Each
+         * asteroid gets a unique phase via its index so the field shimmers
+         * rather than rocking in unison.  Position jitter is small (a few
+         * world units) so collision behaviour stays predictable while the
+         * silhouette visibly drifts.  Angle wobble is the most legible
+         * cue.  Scale breathes ±6 % to suggest "is that getting bigger?"
+         * second-guessing.  All scaled by halluc_f so the effect fades
+         * with the timer. */
+        Vec2  draw_pos   = asteroids[i].pos;
+        float draw_angle = asteroids[i].angle;
+        float draw_scale = 1.0f;
+        if (halluc_f > 0.0f) {
+            float phase    = game_time * 5.3f + (float)i * 0.91f;
+            float jitter_x = sinf(phase)            * 4.5f * halluc_f;
+            float jitter_y = cosf(phase * 1.21f)   * 4.5f * halluc_f;
+            float wobble   = sinf(phase * 0.77f)   * 0.22f * halluc_f;
+            float breathe  = sinf(phase * 1.93f)   * 0.06f * halluc_f;
+            draw_pos.x   += jitter_x;
+            draw_pos.y   += jitter_y;
+            draw_angle   += wobble;
+            draw_scale   += breathe;
+        }
+        vg_draw_shape(&s, draw_pos, draw_angle, draw_scale);
+
+        /* Tox-Gas Hallucinations: ghost-Cacogen overlay on a deterministic
+         * ~1/3 of asteroids so the player misidentifies otherwise-harmless
+         * rocks as elite UFOs.  Selection uses `i % 3 == 0` so the SAME
+         * asteroids "transform" across consecutive frames (the
+         * hallucination is consistent, not strobing), but the OVERLAY
+         * itself shimmers in alpha.  The shape is a low-alpha cyan
+         * triangular silhouette with a dorsal dome arc — a stylised
+         * Cacogen tell.  Drawn at ~85 % asteroid radius so it sits inside
+         * the wireframe and looks like the rock is hosting a UFO. */
+        if (halluc_f > 0.0f && (i % 3) == 0) {
+            float r       = asteroids[i].radius * 0.85f;
+            float phase   = game_time * 6.7f + (float)i * 1.37f;
+            float pulse   = 0.55f + 0.45f * (0.5f + 0.5f * sinf(phase));
+            Uint8 ga      = (Uint8)(120.0f * halluc_f * pulse);
+            SDL_Color ghost_col = (SDL_Color){
+                (Uint8)(HUD_TEXT_CYAN.r * 0.85f),
+                (Uint8)(HUD_TEXT_CYAN.g * 0.95f),
+                (Uint8)(HUD_TEXT_CYAN.b * 1.0f),
+                ga
+            };
+            /* Triangle wedge + crossbar = compact UFO silhouette */
+            Vec2 g_tip   = { 0.0f,           -r * 0.85f };
+            Vec2 g_left  = { -r * 0.95f,      r * 0.35f };
+            Vec2 g_right = {  r * 0.95f,      r * 0.35f };
+            Vec2 g_bar_l = { -r * 0.55f,      r * 0.10f };
+            Vec2 g_bar_r = {  r * 0.55f,      r * 0.10f };
+            Line g_lines[4] = {
+                { g_tip,   g_left  },
+                { g_tip,   g_right },
+                { g_left,  g_right },
+                { g_bar_l, g_bar_r }
+            };
+            Shape g_shape = { g_lines, 4, ghost_col };
+            vg_draw_shape(&g_shape, draw_pos, draw_angle, 1.0f);
+        }
 
         /* Vector Stress-Cracking: draw glowing fracture lines on damaged
          * metal/crystal asteroids, radiating from the interior outward. */
