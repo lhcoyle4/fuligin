@@ -40,12 +40,12 @@ static int           vg_monochrome       = 0;
 static float         vg_chromatic_aberration = 0.0f;
 
 /*
- * Screen-shake displacement applied when blitting the off-screen buffer.
+ * Screen-shake displacement applied during coordinate translation.
  * Kept in the module-state section so they are visible alongside the
  * other globals that affect rendering.
  */
-static int shake_dx = 0;
-static int shake_dy = 0;
+static float g_camera_offset_x = 0.0f;
+static float g_camera_offset_y = 0.0f;
 
 /* ====== INITIALIZATION ====== */
 
@@ -152,6 +152,18 @@ void vg_set_chromatic_aberration(float strength)
     vg_chromatic_aberration = strength;
 }
 
+static void apply_screen_curvature(float *x, float *y) {
+    if (win_w == 0 || win_h == 0) return;
+    float cx = win_w / 2.0f;
+    float cy = win_h / 2.0f;
+    float dx = (*x - cx) / cx;
+    float dy = (*y - cy) / cy;
+    float r2 = dx * dx + dy * dy;
+    float curvature = 0.15f; 
+    *x = cx + cx * dx * (1.0f + curvature * r2);
+    *y = cy + cy * dy * (1.0f + curvature * r2);
+}
+
 /**
  * @brief Draw a shape transformed by position, rotation, and scale.
  *
@@ -200,11 +212,14 @@ void vg_draw_shape(Shape *shape, Vec2 pos, float angle, float scale)
     for (int i = 0; i < shape->line_count; i++) {
         Line l = shape->lines[i];
 
-        /* Rotate, scale, translate to world space, then apply camera. */
-        float x1 = (l.p1.x * c - l.p1.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x;
-        float y1 = (l.p1.x * s + l.p1.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y;
-        float x2 = (l.p2.x * c - l.p2.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x;
-        float y2 = (l.p2.x * s + l.p2.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y;
+        /* Rotate, scale, translate to world space, then apply camera and shake. */
+        float x1 = (l.p1.x * c - l.p1.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x + g_camera_offset_x;
+        float y1 = (l.p1.x * s + l.p1.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y + g_camera_offset_y;
+        float x2 = (l.p2.x * c - l.p2.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x + g_camera_offset_x;
+        float y2 = (l.p2.x * s + l.p2.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y + g_camera_offset_y;
+
+        apply_screen_curvature(&x1, &y1);
+        apply_screen_curvature(&x2, &y2);
 
         if (vg_chromatic_aberration > 0.0f) {
             /* Red channel shifted left. */
@@ -213,12 +228,8 @@ void vg_draw_shape(Shape *shape, Vec2 pos, float angle, float scale)
                                (int)(x1 - vg_chromatic_aberration), (int)y1,
                                (int)(x2 - vg_chromatic_aberration), (int)y2);
 
-            /* Green channel centred (reference position). */
-            SDL_SetRenderDrawColor(vg_renderer, 0, color.g, 0, color.a);
-            SDL_RenderDrawLine(vg_renderer, (int)x1, (int)y1, (int)x2, (int)y2);
-
-            /* Blue channel shifted right. */
-            SDL_SetRenderDrawColor(vg_renderer, 0, 0, color.b, color.a);
+            /* Cyan channel (Green + Blue) shifted right. */
+            SDL_SetRenderDrawColor(vg_renderer, 0, color.g, color.b, color.a);
             SDL_RenderDrawLine(vg_renderer,
                                (int)(x1 + vg_chromatic_aberration), (int)y1,
                                (int)(x2 + vg_chromatic_aberration), (int)y2);
@@ -308,10 +319,13 @@ void vg_draw_shape_trail(Shape *shape, Vec2 *trail_pos, float *trail_angle,
 
         for (int i = 0; i < shape->line_count; i++) {
             Line l = shape->lines[i];
-            float x1 = (l.p1.x * c - l.p1.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x;
-            float y1 = (l.p1.x * s + l.p1.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y;
-            float x2 = (l.p2.x * c - l.p2.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x;
-            float y2 = (l.p2.x * s + l.p2.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y;
+            float x1 = (l.p1.x * c - l.p1.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x + g_camera_offset_x;
+            float y1 = (l.p1.x * s + l.p1.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y + g_camera_offset_y;
+            float x2 = (l.p2.x * c - l.p2.y * s) * scale * vg_zoom + pos.x - vg_camera_offset.x + g_camera_offset_x;
+            float y2 = (l.p2.x * s + l.p2.y * c) * scale * vg_zoom + pos.y - vg_camera_offset.y + g_camera_offset_y;
+
+            apply_screen_curvature(&x1, &y1);
+            apply_screen_curvature(&x2, &y2);
 
             if (vg_chromatic_aberration > 0.0f) {
                 SDL_SetRenderDrawColor(vg_renderer, color.r, 0, 0, (Uint8)a);
@@ -319,10 +333,7 @@ void vg_draw_shape_trail(Shape *shape, Vec2 *trail_pos, float *trail_angle,
                                    (int)(x1 - vg_chromatic_aberration), (int)y1,
                                    (int)(x2 - vg_chromatic_aberration), (int)y2);
 
-                SDL_SetRenderDrawColor(vg_renderer, 0, color.g, 0, (Uint8)a);
-                SDL_RenderDrawLine(vg_renderer, (int)x1, (int)y1, (int)x2, (int)y2);
-
-                SDL_SetRenderDrawColor(vg_renderer, 0, 0, color.b, (Uint8)a);
+                SDL_SetRenderDrawColor(vg_renderer, 0, color.g, color.b, (Uint8)a);
                 SDL_RenderDrawLine(vg_renderer,
                                    (int)(x1 + vg_chromatic_aberration), (int)y1,
                                    (int)(x2 + vg_chromatic_aberration), (int)y2);
@@ -407,18 +418,17 @@ void vg_clear(void)
 }
 
 /**
- * @brief Set the screen-shake displacement for the next vg_present() call.
+ * @brief Set the screen-shake displacement applied during coordinate translation.
  *
- * The displacement is applied as a pixel offset when blitting the
- * persistence texture to the screen.  Call vg_set_shake(0, 0) to cancel.
+ * Call vg_set_shake(0, 0) to cancel.
  *
  * @param dx  Horizontal displacement in pixels.
  * @param dy  Vertical displacement in pixels.
  */
 void vg_set_shake(int dx, int dy)
 {
-    shake_dx = dx;
-    shake_dy = dy;
+    g_camera_offset_x = (float)dx;
+    g_camera_offset_y = (float)dy;
 }
 
 /* ====== PRESENTATION ====== */
@@ -436,16 +446,11 @@ void vg_set_shake(int dx, int dy)
 void vg_present(void)
 {
     if (persistence_tex) {
-        /* Clear the screen before blitting so shake offsets leave black bars. */
+        /* Clear the screen before blitting. */
         SDL_SetRenderDrawColor(vg_renderer, 0, 0, 0, 255);
         SDL_RenderClear(vg_renderer);
 
-        if (shake_dx != 0 || shake_dy != 0) {
-            SDL_Rect dest = {shake_dx, shake_dy, win_w, win_h};
-            SDL_RenderCopy(vg_renderer, persistence_tex, NULL, &dest);
-        } else {
-            SDL_RenderCopy(vg_renderer, persistence_tex, NULL, NULL);
-        }
+        SDL_RenderCopy(vg_renderer, persistence_tex, NULL, NULL);
     }
     /* If no persistence_tex, drawing went directly to the screen — just present. */
     SDL_RenderPresent(vg_renderer);
