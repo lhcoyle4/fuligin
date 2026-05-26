@@ -18,6 +18,7 @@
 #include "vector_font.h"
 #include "audio.h"
 #include "ui.h"
+#include "world_builder.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -1868,14 +1869,18 @@ static void start_next_level()
     }
 
     /* Spawn new asteroid formation at safe distance from the Autodyne */
-    for (int i = 0; i < count; i++) {
-        float angle = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
-        float dist  = 450.0f + ((float)rand() / RAND_MAX) * (2500.0f - 450.0f);
-        Vec2 pos = {
-            player.pos.x + cosf(angle) * dist,
-            player.pos.y + sinf(angle) * dist
-        };
-        spawn_asteroid(pos, 3);
+    WorldRegion region;
+    wb_init_region(&region, g_settings.world.asteroid_density, g_settings.world.enemy_density, g_settings.gameplay.starting_lives);
+    wb_generate_chondrite_gyre(&region, 8000, 8000);
+
+    for (int i = 0; i < MAX_CHONDRITES; i++) {
+        if (region.asteroids[i].active) {
+            Vec2 pos = {
+                player.pos.x + region.asteroids[i].position.x - 4000.0f,
+                player.pos.y + region.asteroids[i].position.y - 4000.0f
+            };
+            spawn_asteroid(pos, 3);
+        }
     }
 
     /* Spawn Anomalous Void Rift starting at level 4 */
