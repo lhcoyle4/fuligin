@@ -97,7 +97,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **30. Consolidate Settings struct** — Reconcile `GameSettings` (spec) with current `Settings` in `game.h`. One canonical struct, one `.cfg` file.
 
-**31. Dynamic CRT glass curvature** — Toggleable shader: 1970s CRT curved faceplate + subtle glass corner reflections. Off by default.
+**31. Dynamic CRT glass curvature** [IN PROGRESS] — `render_crt_glass()` static function added to `game.c` (14 edge-darkening strips + 40 corner glare diagonals via plain SDL2 draw calls); `settings_crt_curve` toggle wired in; function called before `vg_present()`. Shader/GLSL barrel distortion deferred. Off by default.
 
 **32. Chronicle chord harmonics** ✅ [DONE] — Rapid orb pickup → sequential FM-synth pentatonic notes. Combo chain = arpeggio.
 

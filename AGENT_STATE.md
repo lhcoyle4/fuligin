@@ -47,3 +47,4 @@
 | Claude | UI Overhaul Foundation: ui_panel_terminal() + ui_panel_menu() primitives; all 12 ui_panel() calls across menus/overlays/minimap replaced with terminal variant | agent/claude | 2026-05-25 |
 | Claude | HUD panel geometry (item 2): all 3 render_hud() panels converted to ui_panel_terminal(); fix duplicate-symbol linker error (state.c/game.c extern split) | agent/claude | 2026-05-25 |
 | Claude | Cugel-9 board computer (item 26): committed concurrent-agent inline cugel9_say() implementation (6 narrative call sites); parallel external module discarded to avoid dual-render | agent/claude | 2026-05-25 |
+| Claude | CRT glass curvature (item 31) [IN PROGRESS]: render_crt_glass() static fn in game.c (14 edge strips + 40 corner glare diagonals, SDL2 draw calls); vg_apply_crt_glass() removed; settings_crt_curve toggle live | agent/claude | 2026-05-25 |
