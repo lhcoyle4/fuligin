@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Center startup splash text + small minimap visibility tweak (UI priority queue)
-- **Locked Files**: src/game.c, src/ui_hud.c, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -51,4 +51,5 @@
 | Claude | New unintegrated modules ready for follow-up: src/enemy_rustweaver.[ch] (Item 23) + src/drone_chatter.[ch] (Item 27) | a199055 | 2026-05-25 |
 | Claude | FULIGIN_REFACTOR_GUIDE.md: project-local refactoring playbook synthesizing Wikipedia + Augment + FULIGIN-specific traps | 99bf0bb | 2026-05-25 |
 | Claude | World-scale 10x: FUEL_REGEN_RADIUS, ZONE_HOME/INNER/VOID_RADIUS, and warp_locs[] coordinates multiplied by 10 — navigable universe is now 10x larger, encounter density near player unchanged | agent/claude | 2026-05-25 |
+| Claude | Splash centering + minimap visibility + state.h syntax fix: boot text now centered on screen via vf_draw_string_centered, minimap uses ui_panel_terminal + HUD_BORDER_ACTIVE for visibility, state.h garbage lines 222-223 deleted (was blocking whole project build) | agent/claude | 2026-05-25 |
 | Claude | CRT glass curvature (item 31) [IN PROGRESS]: render_crt_glass() static fn in game.c (14 edge strips + 40 corner glare diagonals, SDL2 draw calls); vg_apply_crt_glass() removed; settings_crt_curve toggle live | agent/claude | 2026-05-25 |

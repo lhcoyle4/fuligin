@@ -220,8 +220,10 @@ extern int time_stop_frames;
 extern Vec2 player_pos_history[POS_HISTORY_LEN];
 extern int pos_history_idx;
 extern int check_void_stone(void);
-extern return 0;
-extern };
+/* Removed: two garbage lines ("extern return 0;" / "extern };") that were
+ * orphaned code from a botched paste — they prevented every translation
+ * unit that #include'd state.h from compiling.  Documented in
+ * FULIGIN_REFACTOR_GUIDE.md §4.3. */
 
 
 

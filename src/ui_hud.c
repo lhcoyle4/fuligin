@@ -611,7 +611,9 @@ void render_minimap(void)
     float panel_h = (float)HUD_TR_H;
     SDL_Color mm_zone_col = ui_zone_color(player_zone);
 
-    ui_panel(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_MAIN);
+    /* Use ui_panel_terminal + ACTIVE border for stronger minimap visibility
+     * — matches the unified terminal style and stands out against the void. */
+    ui_panel_terminal(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_ACTIVE);
     ui_scanlines(g_renderer, panel_x, panel_y, panel_w, panel_h);
 
     /* Header */
@@ -958,28 +960,30 @@ void render_menus(void)
         title_timer += 0.016f;  /* visual-only timer, frame-rate dependence acceptable */
 
         if (g_boot_timer < 3.0f) {
+            /* Centered boot splash — 5 lines × 30px = 150px stack, centered
+             * vertically in 960px screen → start_y = 405.  Center-x = 640. */
             SDL_Color term_green = {50, 255, 50, 255};
-            float start_x = 50.0f;
-            float start_y = 50.0f;
-            
+            const float cx      = (float)SCREEN_WIDTH / 2.0f;   /* 640 */
+            float       start_y = ((float)SCREEN_HEIGHT - 150.0f) / 2.0f; /* 405 */
+
             if (g_boot_timer > 0.1f) {
-                vf_draw_string("NOCTIS OS V4.0 LOADED...", start_x, start_y, 16.0f, term_green);
+                vf_draw_string_centered("NOCTIS OS V4.0 LOADED...", cx, start_y, 16.0f, term_green);
                 start_y += 30.0f;
             }
             if (g_boot_timer > 0.6f) {
-                vf_draw_string("MEM CHECK OK...", start_x, start_y, 16.0f, term_green);
+                vf_draw_string_centered("MEM CHECK OK...", cx, start_y, 16.0f, term_green);
                 start_y += 30.0f;
             }
             if (g_boot_timer > 1.2f) {
-                vf_draw_string("INITIALIZING SENSORS...", start_x, start_y, 16.0f, term_green);
+                vf_draw_string_centered("INITIALIZING SENSORS...", cx, start_y, 16.0f, term_green);
                 start_y += 30.0f;
             }
             if (g_boot_timer > 1.8f) {
-                vf_draw_string("LOADING FULIGIN PROTOCOL...", start_x, start_y, 16.0f, term_green);
+                vf_draw_string_centered("LOADING FULIGIN PROTOCOL...", cx, start_y, 16.0f, term_green);
                 start_y += 30.0f;
             }
             if (g_boot_timer > 2.5f) {
-                vf_draw_string("SYSTEM READY.", start_x, start_y, 16.0f, term_green);
+                vf_draw_string_centered("SYSTEM READY.", cx, start_y, 16.0f, term_green);
             }
             return;
         }
