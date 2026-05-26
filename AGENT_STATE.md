@@ -43,3 +43,4 @@
 | Claude | Gravity Slingshot: tangential boost in rift close orbit (150-380u), GRAVITY ASSIST float | agent/claude | 2026-05-25 |
 | Claude | Mark items 3 (segmented bars), 4 (phosphor decay), 18 (slingshot) as done in action list | agent/claude | 2026-05-25 |
 | Claude | Fuel Clock: passive reactor drain + Emergency Drift Mode (thrust block, hull breach at 10s) | agent/claude | 2026-05-25 |
+| Claude | Asteroid Bowling Combos: bowling_timer fragments chain into rocks, STRIKE! float + score multiplier per chain depth | agent/claude | 2026-05-25 |

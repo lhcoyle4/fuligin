@@ -61,7 +61,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **18. Gravity slingshot boosts** ✅ [DONE] — Close orbit (150–380 u) around the void rift gives a continuous tangential velocity boost scaled by orbital depth and tangential speed. Fires only when the player is genuinely curving around the rift (|tan_v| > 30). Spawns a 3 s-cooldown "GRAVITY ASSIST" EventFloat + cyan particles on first entry.
 
-**19. Asteroid bowling combos** — Heavy projectile launches chain into larger rocks. `STRIKE!` float in ACID GREEN + multiplier.
+**19. Asteroid bowling combos** ✅ [DONE] — Heavy projectile launches chain into larger rocks. `STRIKE!` float in ACID GREEN + multiplier.
 
 **20. Cargo bay / inventory weight** *(terminal style — Qud grid)* — Grid-based cargo slots using the exact inventory grid from `FULIGIN_Guide.pdf` p.5: cyan bracket-corner slot cells, item name in cyan, category tag in magenta `[TYPE]`, stats in acid green. Heavy cargo degrades ship physics.
 
