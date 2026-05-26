@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Parallel batch: (21) Ascians + (23) Rust-Weavers + (27) Pet drone chatter — each owns its own NEW files only
+- **Locked Files**: include/enemy_ascian.h, src/enemy_ascian.c, include/enemy_rustweaver.h, src/enemy_rustweaver.c, include/drone_chatter.h, src/drone_chatter.c, src/game.c (integration only — main writer), AGENT_STATE.md, FULIGIN_ACTION_LIST.md, todo.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
