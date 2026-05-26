@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Item 21 — Ascians (rigid geometric patrol interceptors); new module + integration
+- **Locked Files**: src/game.c, Makefile, src/enemy_ascian.c (new), include/enemy_ascian.h (new), todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
