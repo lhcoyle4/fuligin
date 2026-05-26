@@ -4,8 +4,8 @@
 ## Agent: Claude (Anthropic)
 - **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: Asteroid Bowling Combos (action list item 19) + mark todo #11 slingshot done
-- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
+- **Active Task**: UI overhaul foundation — ui_panel_terminal/ui_panel_menu primitives + retrofit HUD and top-level menus to unified Qud-terminal style; remove duplicate/off-style UI
+- **Locked Files**: src/ui.c, include/ui.h, src/game.c, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
