@@ -11,7 +11,7 @@
 # --- Compiler -----------------------------------------------------------------
 CC = gcc
 # Use absolute paths so GCC resolves headers correctly under Windows/MSYS.
-PROJ_DIR = $(CURDIR)
+PROJ_DIR = $(subst \,/,$(CURDIR))
 
 # --- Flags --------------------------------------------------------------------
 CFLAGS = -Wall -Wextra -std=c99 -O2 -I"$(PROJ_DIR)/include" \
@@ -19,12 +19,12 @@ CFLAGS = -Wall -Wextra -std=c99 -O2 -I"$(PROJ_DIR)/include" \
          -I"$(PROJ_DIR)/thirdparty/SDL2-2.30.3/x86_64-w64-mingw32/include/SDL2" \
          -I"$(PROJ_DIR)/thirdparty/SDL2_mixer-2.8.2/x86_64-w64-mingw32/include" \
          -I"$(PROJ_DIR)/thirdparty/SDL2_mixer-2.8.2/x86_64-w64-mingw32/include/SDL2"
-LDFLAGS = -L"$(PROJ_DIR)/thirdparty/SDL2-2.30.3/x86_64-w64-mingw32/lib" \
+LDFLAGS = -L"C:/Users/lhcoy/OneDrive/Desktop/sandbox/fuligin/thirdparty/SDL2-2.30.3/x86_64-w64-mingw32/lib" \
           -L"$(PROJ_DIR)/thirdparty/SDL2_mixer-2.8.2/x86_64-w64-mingw32/lib" \
           -lmingw32 -lSDL2main -lSDL2 -lSDL2_mixer
 
 # --- Sources ------------------------------------------------------------------
-SRC = src/main.c src/vector_graphics.c src/game.c src/vector_font.c src/audio.c src/ui.c src/world_builder.c src/ai.c
+SRC = src/main.c src/vector_graphics.c src/game.c src/vector_font.c src/audio.c src/ui.c src/world_builder.c src/ai.c src/ui_hud.c
 OBJ = $(SRC:.c=.o)
 
 # --- Native target ------------------------------------------------------------
