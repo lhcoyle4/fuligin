@@ -81,6 +81,20 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define FUEL_RELIC_RATE           0.04f   /* extra drain per active relic/weapon system */
 #define FUEL_DRIFT_PENALTY_TIME  10.0f   /* seconds adrift before emergency hull breach */
 #define FUEL_DRIFT_RESERVE        0.20f   /* fuel fraction restored on emergency refill */
+/* Solar Flare Cycles (todo.md §2.3 / Lore §3) + Star-Shadow Radiation Shielding
+ * (todo.md §3 / Lore §3 second half).  Periodic flares triple passive reactor
+ * drain in non-Home zones.  When a large/medium asteroid lies between the
+ * player and the origin (the dying sun), the drain is partially negated —
+ * a faint cinnabar vector shadow-line is drawn from the asteroid to the
+ * shielded player so the mechanic is readable. */
+#define SOLAR_FLARE_MIN_INTERVAL    90.0f
+#define SOLAR_FLARE_MAX_INTERVAL   150.0f
+#define SOLAR_FLARE_WARN_DURATION    3.0f
+#define SOLAR_FLARE_ACTIVE_DURATION  5.0f
+#define SOLAR_FLARE_FUEL_MULT        3.0f  /* drain multiplier during ACTIVE phase */
+#define SOLAR_FLARE_SHADOW_MULT      1.4f  /* reduced multiplier while in asteroid shadow */
+#define SOLAR_FLARE_MIN_ZONE          1    /* zone 0 (Home Space) is exempt */
+#define SOLAR_FLARE_SHADOW_HALF_W   80.0f  /* perpendicular shadow corridor half-width (world units) */
 #define XP_THRESHOLD_GROWTH       1.6f    /* XP threshold multiplier per player level */
 #define EXTRA_LIFE_SCORE_INTERVAL 10000   /* score increment between extra-life awards */
 
@@ -96,6 +110,7 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define ZONE_HOME_RADIUS        10000.0f  /* home zone — safe area near station (10x scale) */
 #define ZONE_INNER_RADIUS       35000.0f  /* inner belt — mid-difficulty band (10x scale) */
 #define ZONE_VOID_RADIUS        80000.0f  /* void zone — outer ring, maximum threat (10x scale) */
+#define ZONE_ABYSS_RADIUS      140000.0f  /* the abyss — boundary into DEEP DRIFT (zone 4, item 13) */
 
 /* =========== ENUMERATIONS =========== */
 
@@ -725,6 +740,13 @@ static int   zone_banner_prev_zone  = -1;     /* -1 = not yet initialised */
 static float orb_chord_timer        = 0.0f;   /* window for rapid-collection chain */
 static int   orb_chord_note         = 0;      /* next pentatonic note index [0-4] */
 static int   minimap_visible   = 1;
+
+/* --- Solar Flare Cycles + Star-Shadow Shielding (todo.md §2.3 / §3) --- */
+static float solar_flare_timer      = 0.0f;   /* countdown to next WARNING phase   */
+static float solar_flare_warn_t     = 0.0f;   /* time remaining in WARNING phase   */
+static float solar_flare_active_t   = 0.0f;   /* time remaining in ACTIVE  phase   */
+static float solar_flare_next_iv    = 120.0f; /* rolled interval for current cycle */
+static int   solar_flare_in_shadow  = 0;      /* set each frame by shadow check    */
 
 /* --- Screen shake --- */
 static float screen_shake_timer     = 0.0f;
@@ -2222,6 +2244,20 @@ void game_init()
     if (g_settings.gameplay.starting_lives > 0)
         lives = g_settings.gameplay.starting_lives;
     g_world_seed = g_settings.world.seed;
+
+    /* Solar Flare Cycles: roll the first interval up-front so flares
+     * never fire instantly at startup.  The state machine in
+     * update_progression() will count this down and transition to
+     * WARNING → ACTIVE → COUNTUP again. */
+    {
+        float t = (float)rand() / (float)RAND_MAX;
+        solar_flare_next_iv = SOLAR_FLARE_MIN_INTERVAL
+            + t * (SOLAR_FLARE_MAX_INTERVAL - SOLAR_FLARE_MIN_INTERVAL);
+        solar_flare_timer    = solar_flare_next_iv;
+        solar_flare_warn_t   = 0.0f;
+        solar_flare_active_t = 0.0f;
+        solar_flare_in_shadow = 0;
+    }
 }
 
 /** @brief Mutates a settings value based on the current selection and direction (+1/-1). */
@@ -3237,6 +3273,16 @@ static void update_player_physics(float dt)
                             + player_upgrades.nova_explosion;
             float passive_drain = FUEL_PASSIVE_BASE_RATE
                                 + (float)relic_count * FUEL_RELIC_RATE;
+            /* Solar Flare drain hook (todo.md §2.3 / §3): during ACTIVE
+             * phase the drain triples (SOLAR_FLARE_FUEL_MULT); if a large
+             * asteroid is between the player and the dying sun, the
+             * star-shadow soaks the radiation and the multiplier drops
+             * to SOLAR_FLARE_SHADOW_MULT. */
+            if (solar_flare_active_t > 0.0f) {
+                passive_drain *= solar_flare_in_shadow
+                    ? SOLAR_FLARE_SHADOW_MULT
+                    : SOLAR_FLARE_FUEL_MULT;
+            }
             fuel_current -= passive_drain * dt;
             if (fuel_current < 0.0f) fuel_current = 0.0f;
         }
@@ -5085,6 +5131,99 @@ static void update_progression(float dt)
     /* Chronicle chord harmonics: orb-chain collection window */
     if (orb_chord_timer > 0.0f)
         orb_chord_timer -= dt;
+
+    /* ── Solar Flare Cycles + Star-Shadow check ─────────────────────
+     * Three-phase state machine: COUNTUP → WARNING → ACTIVE → re-roll.
+     * Home Space (zone 0) is exempt — flares only tick once the player
+     * pushes past `SOLAR_FLARE_MIN_ZONE`.  During WARNING and ACTIVE the
+     * star-shadow helper scans the asteroid pool for cover; the boolean
+     * is consumed by update_player_physics (drain multiplier) and by
+     * render_entities (shadow-line visual).                          */
+    if (player.active
+        && (game_state == STATE_PLAYING
+            || game_state == STATE_ATTRACT_GAMEPLAY)
+        && player_zone >= SOLAR_FLARE_MIN_ZONE)
+    {
+        if (solar_flare_active_t > 0.0f) {
+            /* ACTIVE phase: drain × SOLAR_FLARE_FUEL_MULT (or shadow mult) */
+            solar_flare_active_t -= dt;
+            /* Re-check shadow each frame — asteroids drift */
+            {
+                float px = player.pos.x, py = player.pos.y;
+                float pd = sqrtf(px*px + py*py);
+                int in_shadow = 0;
+                if (pd > 1.0f) {
+                    float ux = -px / pd, uy = -py / pd;
+                    for (int i = 0; i < MAX_ASTEROIDS; i++) {
+                        if (!asteroids[i].active) continue;
+                        if (asteroids[i].size < 2) continue;
+                        float ax = asteroids[i].pos.x, ay = asteroids[i].pos.y;
+                        float ad = sqrtf(ax*ax + ay*ay);
+                        if (ad >= pd) continue;
+                        float dx = ax - px, dy = ay - py;
+                        float t  = dx*ux + dy*uy;
+                        if (t < 0.0f || t > pd) continue;
+                        float perp_x = dx - t*ux;
+                        float perp_y = dy - t*uy;
+                        float perp = sqrtf(perp_x*perp_x + perp_y*perp_y);
+                        float half_w = SOLAR_FLARE_SHADOW_HALF_W
+                                     + asteroids[i].radius * 0.6f;
+                        if (perp <= half_w) { in_shadow = 1; break; }
+                    }
+                }
+                solar_flare_in_shadow = in_shadow;
+            }
+            if (solar_flare_active_t <= 0.0f) {
+                solar_flare_active_t = 0.0f;
+                solar_flare_in_shadow = 0;
+                spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                  "FLARE PASSED",
+                                  (SDL_Color){HUD_TEXT_CYAN.r,
+                                              HUD_TEXT_CYAN.g,
+                                              HUD_TEXT_CYAN.b, 255});
+                /* Re-roll next interval */
+                {
+                    float t = (float)rand() / (float)RAND_MAX;
+                    solar_flare_next_iv = SOLAR_FLARE_MIN_INTERVAL
+                        + t * (SOLAR_FLARE_MAX_INTERVAL - SOLAR_FLARE_MIN_INTERVAL);
+                    solar_flare_timer = solar_flare_next_iv;
+                }
+            }
+        } else if (solar_flare_warn_t > 0.0f) {
+            /* WARNING telegraph */
+            solar_flare_warn_t -= dt;
+            if (solar_flare_warn_t <= 0.0f) {
+                solar_flare_warn_t   = 0.0f;
+                solar_flare_active_t = SOLAR_FLARE_ACTIVE_DURATION;
+                spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                  "SOLAR FLARE",
+                                  (SDL_Color){HUD_CINNABAR.r,
+                                              HUD_CINNABAR.g,
+                                              HUD_CINNABAR.b, 255});
+                screen_shake_timer     = 0.35f;
+                screen_shake_intensity = 4.0f;
+                audio_play(SFX_EXPLOSION_SM);
+            }
+        } else {
+            /* COUNTUP — ticks down to WARNING */
+            solar_flare_timer -= dt;
+            if (solar_flare_timer <= 0.0f) {
+                solar_flare_timer  = 0.0f;
+                solar_flare_warn_t = SOLAR_FLARE_WARN_DURATION;
+                cugel9_say("SOLAR FLARE INBOUND. SEEK ASTEROID SHADOW. SURVIVAL OPTIONAL.");
+                spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                  "FLARE INBOUND",
+                                  (SDL_Color){HUD_AMBER.r,
+                                              HUD_AMBER.g,
+                                              HUD_AMBER.b, 255});
+            }
+        }
+    } else {
+        /* Player back in Home Space or inactive — pause the cycle but
+         * keep partial progress so flares don't reset to full on every
+         * dock-and-leave. */
+        solar_flare_in_shadow = 0;
+    }
 }
 
 /* ================================================================== */
@@ -5764,6 +5903,64 @@ static void render_entities(void)
                             PHOS_TRAIL_LEN, orbs[i].trail_head,
                             1.0f, 0.3f, 0.6f);
         vg_draw_shape(&os, orbs[i].pos, orbs[i].life * 5.0f, 1.0f);
+    }
+
+    /* ── Star-Shadow vector lines (Solar Flare lore tie-in) ─────────
+     * During an ACTIVE flare, draw a low-alpha cinnabar tether from any
+     * large asteroid that lies between the player and the origin (the
+     * dying sun) out to the player.  Brightness scales with how centred
+     * the player sits inside the shadow corridor — gives the mechanic a
+     * legible visual.  Drawn *before* asteroids so the lines sit behind
+     * the asteroid silhouette.                                        */
+    if (solar_flare_active_t > 0.0f && player.active) {
+        float px = player.pos.x, py = player.pos.y;
+        float pd = sqrtf(px*px + py*py);
+        if (pd > 1.0f) {
+            float ux = -px / pd, uy = -py / pd;
+            for (int i = 0; i < MAX_ASTEROIDS; i++) {
+                if (!asteroids[i].active) continue;
+                if (asteroids[i].size < 2) continue;
+                float ax = asteroids[i].pos.x, ay = asteroids[i].pos.y;
+                float ad = sqrtf(ax*ax + ay*ay);
+                if (ad >= pd) continue;
+                float dx = ax - px, dy = ay - py;
+                float t  = dx*ux + dy*uy;
+                if (t < 0.0f || t > pd) continue;
+                float perp_x = dx - t*ux;
+                float perp_y = dy - t*uy;
+                float perp = sqrtf(perp_x*perp_x + perp_y*perp_y);
+                float half_w = SOLAR_FLARE_SHADOW_HALF_W
+                             + asteroids[i].radius * 0.6f;
+                if (perp > half_w) continue;
+                /* Alpha = 60..200 scaled by how centred the player is.
+                 * Pulse at 4 Hz so the line shimmers during the flare. */
+                float centre_factor = 1.0f - (perp / half_w);
+                if (centre_factor < 0.0f) centre_factor = 0.0f;
+                float pulse = 0.65f + 0.35f
+                            * sinf(game_time * 8.0f);
+                Uint8 a = (Uint8)(60.0f + 140.0f * centre_factor * pulse);
+                SDL_Color shadow_col = (SDL_Color){
+                    HUD_CINNABAR.r, HUD_CINNABAR.g, HUD_CINNABAR.b, a
+                };
+                /* Line from the player-facing edge of the asteroid out
+                 * to the player.  Drawn in world space using a length-1
+                 * Line passed through vg_draw_shape with the segment
+                 * vector baked into the endpoints.                    */
+                {
+                    /* Endpoint A: asteroid edge nearest the player.   */
+                    float seg_dx = px - ax, seg_dy = py - ay;
+                    float seg_len = sqrtf(seg_dx*seg_dx + seg_dy*seg_dy);
+                    if (seg_len < 0.001f) continue;
+                    float nx = seg_dx / seg_len, ny = seg_dy / seg_len;
+                    Vec2 p1 = { asteroids[i].radius * nx,
+                                asteroids[i].radius * ny };
+                    Vec2 p2 = { seg_dx, seg_dy };
+                    Line sl  = {p1, p2};
+                    Shape ss = {&sl, 1, shadow_col};
+                    vg_draw_shape(&ss, asteroids[i].pos, 0.0f, 1.0f);
+                }
+            }
+        }
     }
 
     /* ── Asteroids ──────────────────────────────────────────────── */
