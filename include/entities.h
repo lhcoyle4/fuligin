@@ -198,6 +198,7 @@ typedef struct {
     int   line_count;
     float bullet_cooldown;
     float invuln_timer;
+    float emp_lock_timer;          /* Item 25: EMP-locked seconds remaining     */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */

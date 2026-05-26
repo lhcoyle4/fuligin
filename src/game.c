@@ -23,6 +23,7 @@
 #include "enemy_rustweaver.h"
 #include "enemy_ascian.h"
 #include "enemy_lictor.h"
+#include "enemy_emp_sentinel.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -246,6 +247,7 @@ typedef struct {
     int   line_count;
     float bullet_cooldown;
     float invuln_timer;
+    float emp_lock_timer;          /* Item 25: EMP-locked seconds remaining     */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -1546,6 +1548,7 @@ static void reset_player(void)
     player.vel    = (Vec2){0.0f, 0.0f};
     player.angle  = 0.0f;
     player.invuln_timer = 2.0f; /* 2 seconds invulnerability */
+    player.emp_lock_timer = 0.0f; /* Item 25: clear EMP lock on respawn */
 }
 
 /* ----------- Zone Classification ----------- */
@@ -2203,6 +2206,7 @@ void game_init()
     rustweaver_init();      /* Item 23: rust-weaver corrosive-spit drone pool */
     ascian_init();          /* Item 21: ascian voiceless polygon-patrol interceptors */
     lictor_init();          /* Item 22: lictor elite pursuit interceptors          */
+    emp_sentinel_init();    /* Item 25: emp sentinels — status-disruption units    */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -2211,6 +2215,7 @@ void game_init()
     }
     player.radius     = 8.0f;
     player.active     = 0;
+    player.emp_lock_timer = 0.0f;
     player.trail_head = 0;
     for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
         player.trail_pos[i] = (Vec2){0.0f, 0.0f};
@@ -3027,6 +3032,11 @@ static void update_player_physics(float dt)
         int fire_key_down   = 0;
         float move_x = 0.0f;
         float move_y = 0.0f;
+        /* Item 25: snapshot pre-input heading so EMP lock can snap-restore
+         * it after the input phase has already mutated player.angle.  We
+         * use this even when emp_lock_timer == 0 so the cost is just one
+         * float copy — the actual snap-restore is gated below. */
+        float snap_emp_angle = player.angle;
 
         /* ── Attract-mode AI pilot ─────────────────────────────────── */
         if (game_state == STATE_ATTRACT_GAMEPLAY) {
@@ -3205,6 +3215,23 @@ static void update_player_physics(float dt)
                 else if (move_x != 0.0f || move_y != 0.0f)
                     player.angle = atan2f(move_x, -move_y);
             }
+        }
+
+        /* ── Item 25: EMP lock — suppress all steering & thrust input ─
+         * Set non-zero by the EMP Sentinel pulse hit in update_collisions.
+         * While locked, freeze the player's heading at the value it held
+         * at the START of this frame (snap_emp_angle, captured below),
+         * and zero out any thrust/movement vector the input phase set.
+         * Bullets can still fire — only steering & thrust are locked,
+         * matching the spec ("EM pulse locks steering and thrust"). */
+        if (player.emp_lock_timer > 0.0f) {
+            player.angle = snap_emp_angle;
+            thrust_key_down = 0;
+            move_x = 0.0f;
+            move_y = 0.0f;
+            is_thrusting = 0;
+            player.emp_lock_timer -= dt;
+            if (player.emp_lock_timer < 0.0f) player.emp_lock_timer = 0.0f;
         }
 
         /* ── Singularity Displacer: double-tap thrust to rift-jump ── */
@@ -4744,6 +4771,46 @@ static void update_collisions(float dt)
         }
     }
 
+    /* ── 5e. EMP Sentinel hit tests (Item 25) ───────────────────────── */
+    /* (a) Player bolts vs Sentinels — destroys the unit, +100 score,
+     *     +6 XP orb.  Sentinels are fragile (one-shot kill) because the
+     *     pulse-charge telegraph already gives the player a fair chance
+     *     to engage before the pulse fires. */
+    for (int b = 0; b < MAX_BULLETS; b++) {
+        if (!bullets[b].active) continue;
+        int emp_slot = emp_sentinel_hit_test(bullets[b].pos.x, bullets[b].pos.y);
+        if (emp_slot >= 0) {
+            bullets[b].active = 0;
+            spawn_particles(bullets[b].pos, 24, HUD_PURPLE);
+            audio_play(SFX_EXPLOSION_MD);
+            spawn_orb(bullets[b].pos, 6);
+            score += 100;
+            spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
+                              "SENTINEL DOWN", HUD_TEXT_CYAN);
+        }
+    }
+
+    /* (b) EMP pulse ring vs player — status effect (not damage).  Sets
+     *     player.emp_lock_timer; update_player_physics reads it and
+     *     suppresses steering/thrust input for the duration.  Bypasses
+     *     Ether Shroud and Phase Shift because it is not a projectile
+     *     hit — it's an EM field.  Void Stone armour does NOT soak it
+     *     (matches the status-effect framing — armour blocks impacts,
+     *     not radiation). */
+    if (player.active && player.invuln_timer <= 0.0f) {
+        if (emp_sentinel_check_player_pulse(player.pos.x, player.pos.y)) {
+            /* Re-arm the lock to its max duration each frame the ring
+             * touches us, so a stationary drift through the pulse keeps
+             * us crippled for the full window rather than glitching out
+             * after the first contact frame. */
+            if (player.emp_lock_timer < 1.6f) player.emp_lock_timer = 1.6f;
+            audio_play(SFX_EXPLOSION_SM);
+            spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                              "EMP LOCK", HUD_PURPLE);
+            cugel9_say("STEERING SYSTEMS OFFLINE. CONGRATULATIONS, YOU ARE DEBRIS.");
+        }
+    }
+
     /* ── 5b. Rust-Weaver hit tests (Item 23) ───────────────────────── */
     /* (a) Player bolts vs drones — destroys the drone, awards score + XP.
      *     rustweaver_hit_test deactivates the drone if it's within ~16u of
@@ -5007,6 +5074,34 @@ static void update_spawning(float dt)
             }
         } else {
             lictor_spawn_timer = 60.0f;
+        }
+    }
+
+    /* ── Item 25: EMP Sentinel spawn pacing ───────────────────────── */
+    /* Status-disruption units appear from Zone 2 onward — sit alongside
+     * Rust-Weavers (Zone 2+) and below Ascian/Lictor in the danger ramp
+     * because the EMP lock is non-lethal on its own.  Cadence 50-80 s
+     * with a 750-1000 u spawn ring; pool cap of 3 lives entirely inside
+     * the module so a "pool full" return short-retries here. */
+    {
+        static float emp_spawn_timer = 45.0f;
+        if (player.active && player_zone >= 2) {
+            emp_spawn_timer -= dt;
+            if (emp_spawn_timer <= 0.0f) {
+                float ang  = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+                float dist = 750.0f + ((float)rand() / RAND_MAX) * 250.0f;
+                float sx   = player.pos.x + cosf(ang) * dist;
+                float sy   = player.pos.y + sinf(ang) * dist;
+                if (emp_sentinel_spawn(sx, sy) >= 0) {
+                    /* Re-arm 50-80 s — sparse so the player has a clear
+                     * window between disruption events. */
+                    emp_spawn_timer = 50.0f + (float)(rand() % 31);
+                } else {
+                    emp_spawn_timer = 8.0f;  /* pool full, short retry */
+                }
+            }
+        } else {
+            emp_spawn_timer = 45.0f;
         }
     }
 
@@ -5414,6 +5509,7 @@ void game_update(float dt)
     rustweaver_update(dt, player.pos.x, player.pos.y);  /* Item 23: rust-weaver AI + spit projectiles */
     ascian_update(dt, player.pos.x, player.pos.y);      /* Item 21: ascian polygon patrol + volleys */
     lictor_update(dt, player.pos.x, player.pos.y);      /* Item 22: lictor pursuit + aimed bolts    */
+    emp_sentinel_update(dt, player.pos.x, player.pos.y);/* Item 25: emp sentinel CHARGE/PULSE cycle */
     update_collisions(dt);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
@@ -6233,6 +6329,12 @@ static void render_entities(void)
      * player can tell elite enemy types apart at a glance.  Same
      * world→screen offset convention as the other enemy modules. */
     lictor_render(g_renderer, camera_pos.x, camera_pos.y);
+
+    /* ── Item 25: EMP Sentinels — purple/cyan status-disruption units ─ */
+    /* Hex purple body with bright cyan pupil, plus an expanding pulse
+     * ring during the PULSE phase.  Drawn last so the ring overlays
+     * other enemies — it's the gameplay-critical telegraph. */
+    emp_sentinel_render(g_renderer, camera_pos.x, camera_pos.y);
 }
 
 /* ────────────────────────────────────────────────────────────────────── */

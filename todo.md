@@ -63,7 +63,7 @@ Rogue uses food to force momentum. In FULIGIN, the ship itself is the clock:
 Adapt Rogue's classic monster behaviors to space entities:
 - [x] **Rust-Weaver Drones:** Spits corrosive green spit that bypasses shields to degrade hull plating. *(Integrated into `src/game.c` — module spawns in Zone 2+; corrosive spit bypasses Ether Shroud and Phase Shift; see action list item 23 for full wiring details.)*
 - [ ] **Scavenger Probes (Leprechauns):** Do not attack directly; instead, they tractor-beam your collected Void Steel and attempt to warp away.
-- [ ] **EMP Sentinels (Floating Eyes):** Pulse a freezing electromagnetic field, locking ship steering and thrust for a brief duration.
+- [x] **EMP Sentinels (Floating Eyes):** Pulse a freezing electromagnetic field, locking ship steering and thrust for a brief duration. *(Integrated 2026-05-26 — module `src/enemy_emp_sentinel.[ch]` spawns in Zone 2+; IDLE→CHARGE (1.4 s telegraph)→PULSE (0.45 s, 380 u ring)→COOLDOWN (4 s) state machine; pulse sets `player.emp_lock_timer = 1.6 s` which is honoured by `update_player_physics` to negate rotation/thrust input; bypasses Ether Shroud / Phase Shift. See action list item 25.)*
 
 ### 6. Status Malfunctions (Blindness & Hallucination)
 - [ ] **Sensor Static (Blindness):** Sensor arrays are damaged by solar radiation, removing the minimap, targeting reticles, and flashing HUD data.
