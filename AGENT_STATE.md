@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Sensor Static (Blindness) status malfunction — radiation-driven minimap+reticle blackout during unshielded solar flares
+- **Locked Files**: include/entities.h, src/game.c, todo.md, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
