@@ -128,4 +128,10 @@ void audio_mute(int muted);
  */
 void audio_set_music_params(float combat, float spookiness, int paused, int gameplay, float dt);
 
+/**
+ * @brief Alters playback speed or fades in an intense percussion track based on player health.
+ * @param factor Intensity factor in [0.0, 1.0].
+ */
+void audio_set_intensity(float factor);
+
 #endif /* AUDIO_H */

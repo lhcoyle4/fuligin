@@ -1078,6 +1078,7 @@ typedef struct {
     float spookiness;        /* 0.0 (near home) to 1.0 (deep abyss) */
     float paused_fraction;   /* 0.0 (playing) to 1.0 (paused) */
     float lpf_state;         /* Low-pass filter state for pause attenuation */
+    float intensity;         /* Dynamic music tempo / intensity */
 } SynthState;
 
 static SynthState synth_state = {
@@ -1087,7 +1088,8 @@ static SynthState synth_state = {
     .combat_level = 0.0f,
     .spookiness = 0.0f,
     .paused_fraction = 0.0f,
-    .lpf_state = 0.0f
+    .lpf_state = 0.0f,
+    .intensity = 0.0f
 };
 
 /* Global mute state tracker */
@@ -1465,8 +1467,9 @@ static void mix_music_callback(void *udata, Uint8 *stream, int len) {
 
         buf[i] = (int16_t)mixed_val;
 
-        /* Advance the music clock */
-        synth_state.time += dt_sample;
+        /* Advance the music clock, speeding up based on intensity */
+        float speed = 1.0f + synth_state.intensity * 0.5f;
+        synth_state.time += dt_sample * speed;
     }
 }
 
@@ -1536,6 +1539,15 @@ void audio_set_music_params(float combat, float spookiness, int paused, int game
         synth_state.paused_fraction -= 3.0f * dt;
         if (synth_state.paused_fraction < paused_target) synth_state.paused_fraction = paused_target;
     }
+}
+
+/**
+ * @brief Sets the dynamic music tempo / intensity.
+ */
+void audio_set_intensity(float factor) {
+    if (factor < 0.0f) factor = 0.0f;
+    if (factor > 1.0f) factor = 1.0f;
+    synth_state.intensity = factor;
 }
 
 /**

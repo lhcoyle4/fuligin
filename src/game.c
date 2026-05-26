@@ -4772,6 +4772,9 @@ static void update_camera_and_audio(float dt)
 
         audio_set_music_params(combat_level, spookiness,
                                is_paused, is_gameplay, dt);
+                               
+        float intensity = (lives <= 1 && player.active) ? 1.0f : 0.0f;
+        audio_set_intensity(intensity);
     }
 
     /* ── FPS counter (updated every 0.5 s) ───────────────────────── */
