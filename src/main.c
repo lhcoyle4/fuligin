@@ -59,14 +59,23 @@ void main_loop(void) {
     game_render();
 }
 
+#include <string.h>
+
 /**
  * @brief Application entry point. Brings up SDL2 subsystems, creates the window and
  *        hardware-accelerated renderer, seeds the RNG, then drives the game loop until
  *        the player quits.
  */
 int main(int argc, char *argv[]) {
-    (void)argc;
-    (void)argv;
+    int log_priority = SDL_LOG_PRIORITY_WARN;
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--info") == 0) {
+            log_priority = SDL_LOG_PRIORITY_INFO;
+        } else if (strcmp(argv[i], "--debug") == 0) {
+            log_priority = SDL_LOG_PRIORITY_DEBUG;
+        }
+    }
+    SDL_LogSetAllPriority(log_priority);
 
     srand((unsigned int)time(NULL));
 

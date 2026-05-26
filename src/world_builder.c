@@ -16,15 +16,15 @@ void wb_generate_chondrite_gyre(WorldRegion* region, int width, int height) {
     int grid_h = height / 40;
     if (grid_w <= 0 || grid_h <= 0) return;
     
-    int cells[100][100] = {0};
-    int temp[100][100] = {0};
+    int* cells = (int*)calloc(grid_w * grid_h, sizeof(int));
+    int* temp = (int*)calloc(grid_w * grid_h, sizeof(int));
     
     // Random initialization
     for (int y = 0; y < grid_h; y++) {
         for (int x = 0; x < grid_w; x++) {
             float r = (float)rand() / (float)RAND_MAX;
             if (r < region->asteroid_density) {
-                cells[y][x] = 1;
+                cells[y * grid_w + x] = 1;
             }
         }
     }
@@ -40,27 +40,27 @@ void wb_generate_chondrite_gyre(WorldRegion* region, int width, int height) {
                         int nx = x + dx;
                         int ny = y + dy;
                         if (nx >= 0 && nx < grid_w && ny >= 0 && ny < grid_h) {
-                            neighbors += cells[ny][nx];
+                            neighbors += cells[ny * grid_w + nx];
                         } else {
                             neighbors++; // edge is a wall
                         }
                     }
                 }
-                if (cells[y][x] == 1) {
-                    temp[y][x] = (neighbors >= 3) ? 1 : 0;
+                if (cells[y * grid_w + x] == 1) {
+                    temp[y * grid_w + x] = (neighbors >= 3) ? 1 : 0;
                 } else {
-                    temp[y][x] = (neighbors >= 5) ? 1 : 0;
+                    temp[y * grid_w + x] = (neighbors >= 5) ? 1 : 0;
                 }
             }
         }
-        memcpy(cells, temp, sizeof(cells));
+        memcpy(cells, temp, grid_w * grid_h * sizeof(int));
     }
     
     // Populate the asteroids array
     int count = 0;
     for (int y = 0; y < grid_h; y++) {
         for (int x = 0; x < grid_w; x++) {
-            if (cells[y][x] == 1 && count < MAX_CHONDRITES) {
+            if (cells[y * grid_w + x] == 1 && count < MAX_CHONDRITES) {
                 region->asteroids[count].position.x = x * 40.0f + 20.0f;
                 region->asteroids[count].position.y = y * 40.0f + 20.0f;
                 region->asteroids[count].radius = 15.0f + ((float)rand() / (float)RAND_MAX) * 10.0f;
@@ -69,6 +69,9 @@ void wb_generate_chondrite_gyre(WorldRegion* region, int width, int height) {
             }
         }
     }
+    
+    free(cells);
+    free(temp);
 }
 
 void wb_spawn_ascian_swarm(WorldRegion* region, int count, float x, float y) {

@@ -2722,6 +2722,18 @@ static void handle_input_upgrade(SDL_Event *event)
             game_state = is_attract_ai ? STATE_ATTRACT_GAMEPLAY : STATE_PLAYING;
             if (ufo.active) audio_play(SFX_UFO_LOOP);
         }
+    } else if (event->type == SDL_KEYDOWN) {
+        SDL_Keycode sym = event->key.keysym.sym;
+        if (sym == SDLK_LEFT || sym == SDLK_a || sym == SDLK_UP || sym == SDLK_w)
+            selected_option = (selected_option + 2) % 3;
+        if (sym == SDLK_RIGHT || sym == SDLK_d || sym == SDLK_DOWN || sym == SDLK_s)
+            selected_option = (selected_option + 1) % 3;
+        if (sym == SDLK_RETURN || sym == SDLK_SPACE) {
+            apply_upgrade(upgrade_options[selected_option]);
+            if (wave_cleared_pending) { wave_cleared_pending = 0; start_next_level(); }
+            game_state = is_attract_ai ? STATE_ATTRACT_GAMEPLAY : STATE_PLAYING;
+            if (ufo.active) audio_play(SFX_UFO_LOOP);
+        }
     }
 }
 
@@ -5858,7 +5870,7 @@ static void render_minimap(void)
     float panel_h = (float)HUD_TR_H;
     SDL_Color mm_zone_col = ui_zone_color(player_zone);
 
-    ui_panel(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_MAIN);
+    ui_panel_terminal(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_MAIN);
     ui_scanlines(g_renderer, panel_x, panel_y, panel_w, panel_h);
 
     /* Header */
@@ -6211,7 +6223,7 @@ static void render_overlays(void)
     if (god_mode) {
         SDL_Color gm_col = ui_pulse(HUD_GOLD_BAR, game_time, 2.0f, 0.4f);
         SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
-        ui_panel(g_renderer, SCREEN_WIDTH / 2.0f - 200.0f, 4.0f, 400.0f, 28.0f,
+        ui_panel_terminal(g_renderer, SCREEN_WIDTH / 2.0f - 200.0f, 4.0f, 400.0f, 28.0f,
                  gm_col);
         vf_draw_string_centered("AUTARCH MODE", SCREEN_WIDTH / 2.0f, 10.0f,
                                 14, gm_col);
@@ -6284,7 +6296,7 @@ static void render_overlays(void)
 
     /* Shop overlay */
     if (game_state == STATE_SHOP) {
-        ui_panel(g_renderer, 50, 30, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 60,
+        ui_panel_terminal(g_renderer, 50, 30, SCREEN_WIDTH - 100, SCREEN_HEIGHT - 60,
                  HUD_BORDER_MAIN);
         vf_draw_string_centered("HOME STATION EXCHANGE",
                                 SCREEN_WIDTH / 2.0f, 60, 20, HUD_TEXT_CYAN);
@@ -6322,7 +6334,7 @@ static void render_overlays(void)
 
     /* Warp-menu overlay */
     if (game_state == STATE_WARP_MENU) {
-        ui_panel(g_renderer, 190, 140, SCREEN_WIDTH - 380, SCREEN_HEIGHT - 280,
+        ui_panel_terminal(g_renderer, 190, 140, SCREEN_WIDTH - 380, SCREEN_HEIGHT - 280,
                  HUD_BORDER_MAIN);
         vf_draw_string_centered("WARP DRIVE \xe2\x80\x94 SAVED LOCI",
                                 SCREEN_WIDTH / 2.0f, 165, 16, HUD_TEXT_CYAN);
@@ -6487,7 +6499,7 @@ static void render_menus(void)
         ui_particle_drift(g_renderer, game_time, 40);
 
         /* Central hero panel */
-        ui_panel(g_renderer, 340, 200, 600, 520, HUD_BORDER_MAIN);
+        ui_panel_terminal(g_renderer, 340, 200, 600, 520, HUD_BORDER_MAIN);
 
         float panel_cx = 340.0f + 600.0f / 2.0f;  /* 640 */
 
@@ -6534,7 +6546,7 @@ static void render_menus(void)
         SDL_RenderFillRect(g_renderer, &overlay);
 
         /* Center panel */
-        ui_panel(g_renderer, 200, 40, 880, SCREEN_HEIGHT - 80, HUD_BORDER_MAIN);
+        ui_panel_terminal(g_renderer, 200, 40, 880, SCREEN_HEIGHT - 80, HUD_BORDER_MAIN);
 
         float panel_cx = 200.0f + 880.0f / 2.0f;  /* 640 */
 
@@ -6633,7 +6645,7 @@ static void render_menus(void)
         float sp_y = (SCREEN_HEIGHT - 640) / 2.0f;   /* 160 */
         float sp_w = 800.0f, sp_h = 640.0f;
         SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
-        ui_panel(g_renderer, sp_x, sp_y, sp_w, sp_h, HUD_BORDER_MAIN);
+        ui_panel_terminal(g_renderer, sp_x, sp_y, sp_w, sp_h, HUD_BORDER_MAIN);
 
         float panel_cx = sp_x + sp_w / 2.0f;  /* 640 */
 
@@ -6828,7 +6840,7 @@ static void render_menus(void)
 
     /* =========== STATE: KEYBINDS =========== */
     } else if (game_state == STATE_KEYBINDS) {
-        ui_panel(g_renderer, 80, 20, SCREEN_WIDTH - 160, SCREEN_HEIGHT - 40,
+        ui_panel_terminal(g_renderer, 80, 20, SCREEN_WIDTH - 160, SCREEN_HEIGHT - 40,
                  HUD_BORDER_MAIN);
 
         float panel_cx = 80.0f + (SCREEN_WIDTH - 160) / 2.0f;  /* 640 */
@@ -6903,7 +6915,7 @@ static void render_menus(void)
         ui_particle_drift(g_renderer, game_time, 25);
 
         /* Panel */
-        ui_panel(g_renderer, 280, 80, 720, 750, HUD_GOLD_BAR);
+        ui_panel_terminal(g_renderer, 280, 80, 720, 750, HUD_GOLD_BAR);
 
         float panel_cx = 280.0f + 720.0f / 2.0f;  /* 640 */
 
@@ -6938,7 +6950,7 @@ static void render_menus(void)
         ui_particle_drift(g_renderer, game_time, 50);
 
         /* Panel */
-        ui_panel(g_renderer, 290, 280, 700, 340, HUD_CINNABAR);
+        ui_panel_terminal(g_renderer, 290, 280, 700, 340, HUD_CINNABAR);
 
         float panel_cx = 290.0f + 700.0f / 2.0f;  /* 640 */
 
@@ -6958,7 +6970,7 @@ static void render_menus(void)
     /* =========== STATE: NEW HIGH SCORE =========== */
     } else if (game_state == STATE_NEW_HIGHSCORE) {
         /* Panel */
-        ui_panel(g_renderer, 340, 280, 600, 340, HUD_GOLD_BAR);
+        ui_panel_terminal(g_renderer, 340, 280, 600, 340, HUD_GOLD_BAR);
 
         float panel_cx = 340.0f + 600.0f / 2.0f;  /* 640 */
 
@@ -7009,7 +7021,7 @@ static void render_menus(void)
             float cx         = card_sx + i * (card_w + card_gap);
             SDL_Color border = is_sel ? HUD_BORDER_ACTIVE : HUD_PANEL_DEEP;
 
-            ui_panel(g_renderer, cx, card_y, card_w, card_h, border);
+            ui_panel_terminal(g_renderer, cx, card_y, card_w, card_h, border);
 
             if (is_sel) {
                 ui_corner_brackets(g_renderer, cx, card_y, card_w, card_h,
