@@ -250,6 +250,7 @@ typedef struct {
     float invuln_timer;
     float emp_lock_timer;          /* Item 25: EMP-locked seconds remaining     */
     float sensor_static_timer;     /* Status: sensor blackout (blindness) secs  */
+    float reverse_drift_timer;     /* Status: thrust vector inverted (confusion)*/
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -763,6 +764,20 @@ static int   solar_flare_in_shadow  = 0;      /* set each frame by shadow check 
 #define SENSOR_STATIC_ROLL_MAX   6.5f   /* max seconds between scramble rolls */
 #define SENSOR_STATIC_HIT_CHANCE 0.45f  /* per-roll probability of scramble  */
 static float sensor_static_roll_t = 0.0f;    /* countdown to next scramble roll */
+
+/* --- Reverse Drift (Confusion) status-malfunction roll state ---
+ * Companion to Sensor Static.  Driven from the same Solar Flare ACTIVE
+ * branch: every 4.5–8.5 s, if the player is NOT in asteroid shadow,
+ * roll a 30 % chance to flip the thrust vector for 3.2 s.  Hiding in
+ * shadow blocks the roll outright — a second-order benefit of cover.
+ * Implementation: a sign multiplier applied to the thrust vector in
+ * update_player_physics(); rotation input is NOT affected (only the
+ * direction the engines push the ship). */
+#define REVERSE_DRIFT_DURATION   3.2f   /* seconds of inverted thrust         */
+#define REVERSE_DRIFT_ROLL_MIN   4.5f   /* min seconds between confusion rolls*/
+#define REVERSE_DRIFT_ROLL_MAX   8.5f   /* max seconds between confusion rolls*/
+#define REVERSE_DRIFT_HIT_CHANCE 0.30f  /* per-roll probability of confusion  */
+static float reverse_drift_roll_t = 0.0f;    /* countdown to next confusion roll */
 
 /* --- Screen shake --- */
 static float screen_shake_timer     = 0.0f;
@@ -1564,6 +1579,7 @@ static void reset_player(void)
     player.invuln_timer = 2.0f; /* 2 seconds invulnerability */
     player.emp_lock_timer = 0.0f; /* Item 25: clear EMP lock on respawn */
     player.sensor_static_timer = 0.0f; /* Status: clear blindness on respawn */
+    player.reverse_drift_timer = 0.0f; /* Status: clear confusion on respawn */
 }
 
 /* ----------- Zone Classification ----------- */
@@ -2233,6 +2249,7 @@ void game_init()
     player.active     = 0;
     player.emp_lock_timer = 0.0f;
     player.sensor_static_timer = 0.0f;
+    player.reverse_drift_timer = 0.0f;
     player.trail_head = 0;
     for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
         player.trail_pos[i] = (Vec2){0.0f, 0.0f};
@@ -3261,6 +3278,17 @@ static void update_player_physics(float dt)
             if (player.sensor_static_timer < 0.0f) player.sensor_static_timer = 0.0f;
         }
 
+        /* ── Reverse Drift (Confusion) tick ──────────────────────────────
+         * Pure timer decay: input is NOT suppressed.  The thrust force
+         * block below substitutes a negative drift_sign when this timer
+         * is positive, so engaging thrust pushes the ship backward
+         * instead of forward.  Triggered by unshielded solar flare
+         * exposure in update_progression() (same gating as Sensor Static). */
+        if (player.reverse_drift_timer > 0.0f) {
+            player.reverse_drift_timer -= dt;
+            if (player.reverse_drift_timer < 0.0f) player.reverse_drift_timer = 0.0f;
+        }
+
         /* ── Singularity Displacer: double-tap thrust to rift-jump ── */
         static Uint32 last_thrust_tap    = 0;
         static int    thrust_key_was_down = 0;
@@ -3290,9 +3318,13 @@ static void update_player_physics(float dt)
         int in_emergency_drift = (fuel_current <= 0.0f);
 
         if (thrust_key_down && !in_emergency_drift) {
-            player.vel.x += sinf(thrust_angle)
+            /* Reverse Drift (Confusion): when active, the thrust vector
+             * is flipped so engaging thrust pushes the ship away from
+             * the heading instead of toward it.  Rotation is unaffected. */
+            float drift_sign = (player.reverse_drift_timer > 0.0f) ? -1.0f : 1.0f;
+            player.vel.x += drift_sign * sinf(thrust_angle)
                             * THRUST_FORCE * player_upgrades.speed_mult * dt;
-            player.vel.y -= cosf(thrust_angle)
+            player.vel.y -= drift_sign * cosf(thrust_angle)
                             * THRUST_FORCE * player_upgrades.speed_mult * dt;
             is_thrusting = 1;
             thrust_timer += dt;
@@ -5406,10 +5438,43 @@ static void update_progression(float dt)
                  * doesn't instantly fire a scramble. */
                 if (sensor_static_roll_t < 1.0f) sensor_static_roll_t = 1.0f;
             }
+            /* Reverse Drift (Confusion) roll: companion to Sensor Static.
+             * Same shadow-gated cadence, but a lower hit chance and a
+             * longer effect window — losing thrust direction is a more
+             * disruptive penalty than losing the minimap, so we cap the
+             * frequency.  Cugel-9 gets a different quip so the player
+             * can audibly tell the two effects apart. */
+            if (solar_flare_in_shadow == 0
+                && player.reverse_drift_timer <= 0.0f)
+            {
+                reverse_drift_roll_t -= dt;
+                if (reverse_drift_roll_t <= 0.0f) {
+                    float r = (float)rand() / (float)RAND_MAX;
+                    if (r < REVERSE_DRIFT_HIT_CHANCE) {
+                        player.reverse_drift_timer = REVERSE_DRIFT_DURATION;
+                        spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                          "REVERSE DRIFT",
+                                          (SDL_Color){HUD_CINNABAR.r,
+                                                      HUD_CINNABAR.g,
+                                                      HUD_CINNABAR.b, 255});
+                        cugel9_say("THRUST POLARITY INVERTED. ENJOY YOUR INVOLUNTARY RETROGRADE.");
+                        audio_play(SFX_EXPLOSION_SM);
+                    }
+                    /* Re-arm the roll regardless of outcome */
+                    {
+                        float t = (float)rand() / (float)RAND_MAX;
+                        reverse_drift_roll_t = REVERSE_DRIFT_ROLL_MIN
+                            + t * (REVERSE_DRIFT_ROLL_MAX - REVERSE_DRIFT_ROLL_MIN);
+                    }
+                }
+            } else if (solar_flare_in_shadow) {
+                if (reverse_drift_roll_t < 1.0f) reverse_drift_roll_t = 1.0f;
+            }
             if (solar_flare_active_t <= 0.0f) {
                 solar_flare_active_t = 0.0f;
                 solar_flare_in_shadow = 0;
                 sensor_static_roll_t = 0.0f; /* reset between flare cycles */
+                reverse_drift_roll_t = 0.0f; /* reset between flare cycles */
                 spawn_event_float(player.pos.x, player.pos.y - 32.0f,
                                   "FLARE PASSED",
                                   (SDL_Color){HUD_TEXT_CYAN.r,
