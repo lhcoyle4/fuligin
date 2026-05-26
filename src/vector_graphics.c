@@ -39,6 +39,17 @@ static float         vg_brightness       = 1.0f;
 static int           vg_monochrome       = 0;
 static float         vg_chromatic_aberration = 0.0f;
 
+#define PHOS_TRAIL_LEN 256
+
+typedef struct {
+    int x1, y1, x2, y2;
+    SDL_Color color;
+    float alpha;
+} PhosLine;
+
+static PhosLine phos_lines[PHOS_TRAIL_LEN];
+static int phos_head = 0;
+
 /*
  * Screen-shake displacement applied during coordinate translation.
  * Kept in the module-state section so they are visible alongside the
@@ -254,6 +265,14 @@ void vg_draw_shape(Shape *shape, Vec2 pos, float angle, float scale)
 
             SDL_SetRenderDrawColor(vg_renderer, color.r, color.g, color.b, color.a);
         }
+
+        phos_lines[phos_head].x1 = (int)x1;
+        phos_lines[phos_head].y1 = (int)y1;
+        phos_lines[phos_head].x2 = (int)x2;
+        phos_lines[phos_head].y2 = (int)y2;
+        phos_lines[phos_head].color = color;
+        phos_lines[phos_head].alpha = 1.0f;
+        phos_head = (phos_head + 1) % PHOS_TRAIL_LEN;
     }
 
     if (persistence_tex) {
@@ -382,6 +401,15 @@ void vg_draw_shape_trail(Shape *shape, Vec2 *trail_pos, float *trail_angle,
  */
 void vg_apply_persistence(float fade_amount)
 {
+    for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
+        if (phos_lines[i].alpha > 0.0f) {
+            phos_lines[i].alpha -= fade_amount;
+            if (phos_lines[i].alpha < 0.0f) {
+                phos_lines[i].alpha = 0.0f;
+            }
+        }
+    }
+
     if (!persistence_tex) {
         /* Fallback: no offscreen texture — clear each frame so draws are fresh. */
         SDL_SetRenderDrawColor(vg_renderer, 0, 0, 0, 255);
@@ -452,6 +480,23 @@ void vg_present(void)
 
         SDL_RenderCopy(vg_renderer, persistence_tex, NULL, NULL);
     }
+    
+    SDL_SetRenderDrawBlendMode(vg_renderer, SDL_BLENDMODE_ADD);
+    int ox = persistence_tex ? shake_dx : 0;
+    int oy = persistence_tex ? shake_dy : 0;
+    for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
+        if (phos_lines[i].alpha > 0.0f) {
+            Uint8 a = (Uint8)(phos_lines[i].color.a * phos_lines[i].alpha);
+            SDL_SetRenderDrawColor(vg_renderer, 
+                phos_lines[i].color.r, 
+                phos_lines[i].color.g, 
+                phos_lines[i].color.b, a);
+            SDL_RenderDrawLine(vg_renderer, 
+                phos_lines[i].x1 + ox, phos_lines[i].y1 + oy, 
+                phos_lines[i].x2 + ox, phos_lines[i].y2 + oy);
+        }
+    }
+    
     /* If no persistence_tex, drawing went directly to the screen — just present. */
     SDL_RenderPresent(vg_renderer);
 }
