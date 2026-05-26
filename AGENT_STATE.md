@@ -4,8 +4,8 @@
 ## Agent: Claude (Anthropic)
 - **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: Star-Shadow Radiation Shielding (todo.md §3 / Lore §3) — extend Solar Flare drain with asteroid-shadow soak + vector shadow-line visual
-- **Locked Files**: src/game.c
+- **Active Task**: Star-Shadow Radiation Shielding (todo.md §3 / Lore §3) — extend Solar Flare drain with asteroid-shadow soak + vector shadow-line visual; finalize and commit
+- **Locked Files**: src/game.c, todo.md, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
