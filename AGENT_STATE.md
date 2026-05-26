@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Wire Item 23 (Rust-Weaver Drones) into game loop — module exists at src/enemy_rustweaver.[ch] but is not in Makefile SRC and never called from game.c
+- **Locked Files**: Makefile, src/game.c, src/enemy_rustweaver.c, include/enemy_rustweaver.h, todo.md, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
