@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Reverse Drift (Confusion) status malfunction (todo.md §6). Mirror Sensor Static pattern: per-frame roll during Solar Flare ACTIVE, gated by Star-Shadow cover. When active, invert thrust vector direction in update_player_physics().
+- **Locked Files**: src/game.c, include/entities.h, todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
