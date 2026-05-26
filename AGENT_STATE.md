@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Tox-Gas Hallucinations status malfunction (todo.md §6, Item 6.2)
+- **Locked Files**: src/game.c, include/entities.h
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
