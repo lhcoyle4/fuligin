@@ -1093,6 +1093,9 @@ static SynthState synth_state = {
 /* Global mute state tracker */
 static int audio_is_muted = 0;
 
+/* Global SFX muffle state */
+static int sfx_muffled = 0;
+
 /* Chord pad base frequencies: Am, F, Dm, E */
 static const float pad_freqs[4][3] = {
     {220.0f, 261.63f, 329.63f}, /* Am (A3, C4, E4) */
@@ -1405,6 +1408,14 @@ static void mix_music_callback(void *udata, Uint8 *stream, int len) {
         /* Retrieve and scale incoming SFX sample */
         float sfx_val = (float)buf[i] * sfx_scale;
 
+        static float sfx_lpf_state = 0.0f;
+        if (sfx_muffled) {
+            sfx_lpf_state += 0.15f * (sfx_val - sfx_lpf_state);
+            sfx_val = sfx_lpf_state;
+        } else {
+            sfx_lpf_state = sfx_val;
+        }
+
         double t = synth_state.time;
 
         /* Generate music tracks */
@@ -1554,6 +1565,13 @@ void audio_mute(int muted) {
     } else {
         Mix_Volume(-1, (settings_volume * MIX_MAX_VOLUME) / 100);
     }
+}
+
+/**
+ * @brief Toggles a muffled low-pass filter effect for sound effects, e.g. when paused.
+ */
+void audio_set_muffled(int muffled) {
+    sfx_muffled = muffled;
 }
 
 /**
@@ -1713,6 +1731,46 @@ void audio_play(SoundEffect sfx) {
         }
     } else {
         Mix_PlayChannel(-1, mix_chunks[sfx], 0);
+    }
+}
+
+/**
+ * @brief Plays a sound effect with panning and pitch modulation.
+ */
+void audio_play_ex(SoundEffect sfx, float x, float center_x, float pitch) {
+    if (sfx < 0 || sfx >= SFX_COUNT || !mix_chunks[sfx]) return;
+
+    int channel = -1;
+    if (sfx == SFX_UFO_LOOP) {
+        if (ufo_channel == -1 || !Mix_Playing(ufo_channel)) {
+            ufo_channel = Mix_PlayChannel(-1, mix_chunks[sfx], -1);
+        }
+        channel = ufo_channel;
+    } else if (sfx == SFX_THRUST) {
+        if (thrust_channel == -1 || !Mix_Playing(thrust_channel)) {
+            thrust_channel = Mix_PlayChannel(-1, mix_chunks[sfx], -1);
+        }
+        channel = thrust_channel;
+    } else {
+        channel = Mix_PlayChannel(-1, mix_chunks[sfx], 0);
+    }
+
+    if (channel != -1) {
+        /* Panning */
+        float pan = (x - center_x) / center_x;
+        if (pan < -1.0f) pan = -1.0f;
+        if (pan > 1.0f) pan = 1.0f;
+        
+        Uint8 right = (Uint8)(127.0f * (pan + 1.0f));
+        Uint8 left = 254 - right;
+        Mix_SetPanning(channel, left, right);
+
+        /* Pitch modulation hook (using reverse stereo as an indicator/placeholder) */
+        if (pitch < 1.0f) {
+            Mix_SetReverseStereo(channel, 1);
+        } else {
+            Mix_SetReverseStereo(channel, 0);
+        }
     }
 }
 

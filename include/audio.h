@@ -68,6 +68,21 @@ int audio_init(void);
 void audio_play(SoundEffect sfx);
 
 /**
+ * @brief Plays a sound effect with panning and pitch modulation.
+ * @param sfx The sound effect to play.
+ * @param x_coord The X coordinate of the sound source.
+ * @param center_x The X coordinate of the screen center.
+ * @param pitch The pitch modulation multiplier.
+ */
+void audio_play_ex(SoundEffect sfx, float x_coord, float center_x, float pitch);
+
+/**
+ * @brief Toggles a muffled low-pass filter effect for sound effects, e.g. when paused.
+ * @param muffled Non-zero to enable muffle, zero to disable.
+ */
+void audio_set_muffled(int muffled);
+
+/**
  * @brief Stops a currently-playing looping sound effect (SFX_THRUST or SFX_UFO_LOOP).
  *        Has no effect on one-shot effects or if the effect is not playing.
  * @param sfx The looping sound effect to halt.
