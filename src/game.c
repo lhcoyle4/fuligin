@@ -22,6 +22,7 @@
 #include "drone_chatter.h"
 #include "enemy_rustweaver.h"
 #include "enemy_ascian.h"
+#include "enemy_lictor.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -2177,6 +2178,7 @@ void game_init()
     drone_chatter_init();   /* Item 27: pet shield-drone chatter pool */
     rustweaver_init();      /* Item 23: rust-weaver corrosive-spit drone pool */
     ascian_init();          /* Item 21: ascian voiceless polygon-patrol interceptors */
+    lictor_init();          /* Item 22: lictor elite pursuit interceptors          */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -4644,6 +4646,56 @@ static void update_collisions(float dt)
         }
     }
 
+    /* ── 5d. Lictor hit tests (Item 22) ─────────────────────────────── */
+    /* (a) Player bolts vs Lictors — destroys the interceptor, awards
+     *     elite score + XP.  Higher reward than Ascians because the
+     *     Lictor is harder to track (active pursuit, not rigid patrol). */
+    for (int b = 0; b < MAX_BULLETS; b++) {
+        if (!bullets[b].active) continue;
+        int lic_slot = lictor_hit_test(bullets[b].pos.x, bullets[b].pos.y);
+        if (lic_slot >= 0) {
+            bullets[b].active = 0;
+            spawn_particles(bullets[b].pos, 28, HUD_CINNABAR);
+            audio_play(SFX_EXPLOSION_MD);
+            spawn_orb(bullets[b].pos, 12);
+            score += 200;
+            spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
+                              "LICTOR DOWN", HUD_CINNABAR);
+        }
+    }
+
+    /* (b) Lictor aimed bolt vs player hull — standard projectile hit;
+     *     shields/Phase Shift can soak it (no special bypass).  Void
+     *     Stone armour soaks one hit if equipped.                       */
+    if (player.active && player.invuln_timer <= 0.0f) {
+        if (lictor_check_player_hit(player.pos.x, player.pos.y,
+                                    player.radius + 2.0f)) {
+            if (check_void_stone()) {
+                /* Void Stone armour soaks one hit — near-miss flash.   */
+            } else {
+                player.active = 0;
+                audio_play(SFX_EXPLOSION_LG);
+                audio_stop(SFX_THRUST);
+                spawn_particles(player.pos, 32, HUD_CINNABAR);
+                spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                                  "PURSUED", HUD_CINNABAR);
+                cugel9_say("LICTOR RAN YOU DOWN. PREDICTABLE OUTCOME, GIVEN YOUR PILOTING.");
+                lives--;
+                if (lives <= 0) {
+                    game_state = STATE_GAMEOVER;
+                    audio_stop(SFX_UFO_LOOP);
+                } else {
+                    player.invuln_timer = 2.0f;
+                    /* Respawn near origin so the next life isn't immediately
+                     * inside the pursuing Lictor's firing arc.              */
+                    player.pos.x = (float)(SCREEN_WIDTH / 2);
+                    player.pos.y = (float)(SCREEN_HEIGHT / 2);
+                    player.vel.x = player.vel.y = 0.0f;
+                }
+            }
+        }
+    }
+
     /* ── 5b. Rust-Weaver hit tests (Item 23) ───────────────────────── */
     /* (a) Player bolts vs drones — destroys the drone, awards score + XP.
      *     rustweaver_hit_test deactivates the drone if it's within ~16u of
@@ -4881,6 +4933,35 @@ static void update_spawning(float dt)
         }
     }
 
+    /* ── Item 22: Lictor spawn pacing ─────────────────────────────── */
+    /* Elite predators that pursue the player at high speed.  Zone 4+
+     * only — they belong to the deepest tier of the danger ramp,
+     * behind Ascians (Zone 3+) and Rust-Weavers (Zone 2+).  Spawn
+     * cadence is sparse (90-130s) so each appearance feels like a
+     * threat event, not a constant pressure.                          */
+    {
+        static float lictor_spawn_timer = 60.0f;
+        if (player.active && player_zone >= 4) {
+            lictor_spawn_timer -= dt;
+            if (lictor_spawn_timer <= 0.0f) {
+                float ang  = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+                float dist = 900.0f + ((float)rand() / RAND_MAX) * 300.0f;
+                float sx   = player.pos.x + cosf(ang) * dist;
+                float sy   = player.pos.y + sinf(ang) * dist;
+                if (lictor_spawn(sx, sy, player.pos.x, player.pos.y) >= 0) {
+                    /* Re-arm 90-130 s — rare, threat-event cadence. */
+                    lictor_spawn_timer = 90.0f + (float)(rand() % 41);
+                    /* Foreshadow the arrival with a sad Cugel-9 quip. */
+                    cugel9_say("LICTOR ON INTERCEPT VECTOR. RECOMMEND PRAYER.");
+                } else {
+                    lictor_spawn_timer = 10.0f;  /* pool full, short retry */
+                }
+            }
+        } else {
+            lictor_spawn_timer = 60.0f;
+        }
+    }
+
     /*
      * Sound beat system: a two-tone pulse whose period compresses as the
      * number of active Void Stones falls.  speed_mult ∈ [0.2, 1.0] maps
@@ -4893,6 +4974,15 @@ static void update_spawning(float dt)
         if (speed_mult < 0.2f) speed_mult = 0.2f;
         if (speed_mult > 1.0f) speed_mult = 1.0f;
         float beat_delay = 0.25f + 0.75f * speed_mult;
+
+        /* Item 22: "Arrival accelerates beat" — while any Lictor is on
+         * the field, compress the beat tempo by ~35 % so the danger
+         * pulse rises with the elite predator's presence.  Clamp the
+         * lower bound to keep the audio from clipping into a buzz. */
+        if (lictor_alive_count() > 0) {
+            beat_delay *= 0.65f;
+            if (beat_delay < 0.15f) beat_delay = 0.15f;
+        }
 
         beat_timer -= dt;
         if (beat_timer <= 0.0f) {
@@ -5182,6 +5272,7 @@ void game_update(float dt)
     drone_chatter_update(dt);   /* Item 27: tick fade timers on drone chatter floats */
     rustweaver_update(dt, player.pos.x, player.pos.y);  /* Item 23: rust-weaver AI + spit projectiles */
     ascian_update(dt, player.pos.x, player.pos.y);      /* Item 21: ascian polygon patrol + volleys */
+    lictor_update(dt, player.pos.x, player.pos.y);      /* Item 22: lictor pursuit + aimed bolts    */
     update_collisions(dt);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
@@ -5936,6 +6027,13 @@ static void render_entities(void)
      * + magenta bolt streaks read as a clean geometric contrast to the
      * rust-weaver's organic green stars. */
     ascian_render(g_renderer, camera_pos.x, camera_pos.y);
+
+    /* ── Item 22: Lictor elite pursuit interceptors + aimed bolts ─── */
+    /* Cinnabar narrow delta silhouette + amber bolt streaks — visually
+     * distinct from Ascian magenta and Rust-Weaver acid-green so the
+     * player can tell elite enemy types apart at a glance.  Same
+     * world→screen offset convention as the other enemy modules. */
+    lictor_render(g_renderer, camera_pos.x, camera_pos.y);
 }
 
 /* ────────────────────────────────────────────────────────────────────── */

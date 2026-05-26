@@ -24,9 +24,9 @@ This document outlines the current developmental milestones for FULIGIN, alongsi
   - [x] Pulse a flashing `>>> DANGER <<<` alert at bottom-center when enemies are close
 - [ ] **Remnant Debris (Hidden Hazards)**
   - [ ] Code invisible spatial hazards and ghost asteroids requiring the `PALE SIGHT` upgrade
-- [ ] **High-Zone specialized Enemies**
+- [x] **High-Zone specialized Enemies**
   - [x] *Ascians:* Voiceless interceptors patrolling in rigid geometric trajectories
-  - [ ] *Lictors:* Elite, aggressive interceptor saucers that pursue the Autodyne at high speeds
+  - [x] *Lictors:* Elite, aggressive interceptor saucers that pursue the Autodyne at high speeds
 - [x] **Cacogen UFO Auditory Signature**
   - [x] Synthesize procedural oscillating hums in `src/audio.c` for active saucers
 

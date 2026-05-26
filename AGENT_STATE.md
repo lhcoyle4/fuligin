@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Item 22 — Lictors (elite aggressive interceptor saucers, Zone 4+, beat-accelerator)
-- **Locked Files**: src/enemy_lictor.c, include/enemy_lictor.h, src/game.c, Makefile, todo.md, FULIGIN_ACTION_LIST.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
@@ -56,3 +56,4 @@
 | Claude | Pet shield-drone chatter (Item 27) integrated: drone_chatter.c added to Makefile SRC; NpcEntity gained chatter_timer field; NPC update loop emits TARGET_UFO / TARGET_LARGE / HELP / COORDINATING events based on proximity & game state; drone_chatter_update() ticks each frame; drone_chatter_render() called after NPC shapes; full compile-clean | agent/claude | 2026-05-26 |
 | Claude | Rust-Weaver Drones (Item 23) integrated + Makefile SRC repair: enemy_rustweaver.[ch] wired into game.c (init, update, render, Zone 2+ spawn pacing 35-55s with jitter, player-bolt-vs-drone hit test, corrosive-spit-vs-player hull damage that bypasses Ether Shroud and Phase Shift). rustweaver_render signature gained camera_x/y params so the raw SDL_RenderDrawLineF calls render in screen-space. Makefile SRC line restored to include the previously-dropped src/state.c and src/game_data.c (link was broken — ~60 undefined references); also added src/enemy_rustweaver.c. Clean build, exe produced (314KB), no new warnings. | agent/claude | 2026-05-26 |
 | Claude | Ascians (Item 21) integrated: new module enemy_ascian.[ch] — voiceless polygon-patrol interceptors. Each Ascian walks the perimeter of a regular N-gon (3-6 sides) at constant angular speed, no pursuit, no randomness. Detect radius 600u; on cooldown elapses, fires a tight three-bolt magenta wedge (0.18 rad spread) at the player. Wired into game.c: ascian_init in game_init, ascian_update after rustweaver_update in tick, ascian_render after rustweaver_render. Zone 3+ spawn pacing (55-85s timer, 800-1100u ring); cycles triangle/square/pentagon patrol shapes deterministically. Collision section 5c handles player-bolt vs Ascian (+150 score, ASCIAN DOWN float) and Ascian-bolt vs player (standard hit, Void Stone soak, INTERCEPTED float + Cugel-9 quip). Makefile SRC updated. Full project rebuilds clean, 319KB exe. | agent/claude | 2026-05-26 |
+| Claude | Lictors (Item 22) integrated: new module enemy_lictor.[ch] — elite aggressive interceptor saucers that pursue the player at high speed. Pursuit AI: per-frame thrust vector toward player (240 u/s²) with 260 u/s speed cap and 0.18/s linear drag — predator arc, not a perfect tracker. Aimed bolt every 2.4s when player within 900u detect radius (340 u/s amber streak). Wired into game.c: lictor_init in game_init, lictor_update after ascian_update, lictor_render after ascian_render. Zone 4+ spawn pacing (90-130s timer, 900-1200u ring) with Cugel-9 foreshadow quip on arrival. Collision section 5d handles player-bolt vs Lictor (+200 score, LICTOR DOWN float) and Lictor-bolt vs player (standard hit, Void Stone soak, PURSUED float + Cugel-9 quip). "Arrival accelerates beat" implemented via lictor_alive_count() accessor — global beat-pulse code compresses tempo by ~35% (clamped to 0.15s minimum) while any Lictor is alive. Cinnabar narrow-delta silhouette + amber bolt streaks, visually distinct from Ascian magenta and Rust-Weaver acid-green. Makefile SRC updated. Clean build, 325KB exe, no new warnings. | agent/claude | 2026-05-26 |
