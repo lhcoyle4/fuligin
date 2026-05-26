@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Asteroid Bowling Combos (action list item 19) + mark todo #11 slingshot done
+- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
