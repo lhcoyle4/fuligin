@@ -3074,6 +3074,62 @@ static void update_player_physics(float dt)
         Vec2 ext_f = calculate_external_forces(player.pos);
         player.vel.x += ext_f.x * dt;
         player.vel.y += ext_f.y * dt;
+
+        /* ── Gravity slingshot: tangential boost in rift close orbit ──
+         * When the player orbits within the slingshot band (150–380 units
+         * from the void rift) and has meaningful tangential velocity (i.e.
+         * they are curving around rather than falling straight in), apply a
+         * continuous tangential kick proportional to depth in the band and
+         * current tangential speed.  This rewards deliberate orbit manoeuvres
+         * with a free velocity boost — no fuel cost, no button press.
+         *
+         * Band geometry:
+         *   < 150 u  : inside the singularity (normal gravity dominates)
+         *   150–380 u: slingshot zone — boost active
+         *   > 380 u  : too far, normal gravity only
+         *
+         * On first entry (3 s cooldown), spawn particles + EventFloat.      */
+        if (rift.active) {
+            static float sling_float_cd = 0.0f;
+            if (sling_float_cd > 0.0f) sling_float_cd -= dt;
+
+            float sdx  = player.pos.x - rift.pos.x;
+            float sdy  = player.pos.y - rift.pos.y;
+            float sdst = sqrtf(sdx * sdx + sdy * sdy);
+
+            if (sdst > 150.0f && sdst < 380.0f && sdst > 0.5f) {
+                /* Radial unit vector (rift → player) */
+                float rx = sdx / sdst;
+                float ry = sdy / sdst;
+                /* Tangential unit vector (clockwise perp. to radial) */
+                float tx = -ry;
+                float ty =  rx;
+                /* Signed tangential component of current velocity */
+                float tan_v = player.vel.x * tx + player.vel.y * ty;
+
+                /* Only boost if player has significant orbital motion */
+                if (fabsf(tan_v) > 30.0f) {
+                    /* Boost peaks at inner edge (150 u), fades to 0 at 380 u */
+                    float depth = (380.0f - sdst) / 230.0f;   /* 0..1 */
+                    float sign  = (tan_v > 0.0f) ? 1.0f : -1.0f;
+                    float boost = sign * 90.0f * depth * dt;
+                    player.vel.x += tx * boost;
+                    player.vel.y += ty * boost;
+
+                    /* Feedback: particles + EventFloat, once per 3 s */
+                    if (sling_float_cd <= 0.0f) {
+                        spawn_particles(player.pos, 12,
+                                        (SDL_Color){80, 200, 255, 210});
+                        spawn_event_float(player.pos.x,
+                                          player.pos.y - 28.0f,
+                                          "GRAVITY ASSIST",
+                                          (SDL_Color){80, 200, 255, 240});
+                        sling_float_cd = 3.0f;
+                    }
+                }
+            }
+        }
+
         player.vel.x *= powf(FRICTION, dt * 60.0f);
         player.vel.y *= powf(FRICTION, dt * 60.0f);
         player.pos.x += player.vel.x * dt;

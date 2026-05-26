@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Gravity Slingshot Boosts (item 18) + mark items 3/4 done
-- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -40,3 +40,5 @@
 | Claude | Score/Event Floats: EventFloat pool, typed HIT/CRIT/CHRONICLE/VENT labels with scale+fade | agent/claude | 2026-05-25 |
 | Claude | Warp-Drive Singularity Exit FX: CRT bloom flash + 3 expanding cyan vector rings on warp arrival (default variant) | agent/claude | 2026-05-25 |
 | Claude | Screen-Edge Zone Vignette: PHOTIC RUST tint scaling with zone depth, CINNABAR 2Hz beat pulse | agent/claude | 2026-05-25 |
+| Claude | Gravity Slingshot: tangential boost in rift close orbit (150-380u), GRAVITY ASSIST float | agent/claude | 2026-05-25 |
+| Claude | Mark items 3 (segmented bars), 4 (phosphor decay), 18 (slingshot) as done in action list | agent/claude | 2026-05-25 |

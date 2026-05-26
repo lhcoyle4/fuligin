@@ -21,13 +21,13 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **2. HUD panel geometry** *(terminal style — Qud/Noctis)* — Score, fuel, ammo, chronicle bar, reliquary count, zone indicator all use `ui_panel_terminal()`. No diagonal cuts on combat HUD. Monospace labels in `#88ccff` cyan; data values in `#39FF14` acid green; category/type tags in `#FF00FF` magenta using `[BRACKET]` notation. Reference: `FULIGIN_Guide.pdf` p.2 item cards and p.5 inventory UI.
 
-**3. Segmented / block progress bars** *(terminal style)* — `ui_bar_segmented()` for Chronicle/XP: acid green fill, discrete block segments per 10%, dark `#001100` track, 1px tight border. `ui_bar_block()` for hull/shields. Danger ramp on fuel/hull: `#39FF14` → `#FF8C00` at 30% → `#E34234` at 15%. Label format: `FUEL: 847 / 1200` (monospace, label dim, value bright). Reference: `FULIGIN_HUD_DESIGN_BRIEF.md` §1B Qud bar spec.
+**3. Segmented / block progress bars** ✅ [DONE] *(terminal style)* — `ui_bar_segmented()` for Chronicle/XP: acid green fill, discrete block segments per 10%, dark `#001100` track, 1px tight border. `ui_bar_block()` for hull/shields. Danger ramp on fuel/hull: `#39FF14` → `#FF8C00` at 30% → `#E34234` at 15%. Label format: `FUEL: 847 / 1200` (monospace, label dim, value bright). Reference: `FULIGIN_HUD_DESIGN_BRIEF.md` §1B Qud bar spec.
 
 ---
 
 ## 🟠 Visual Polish
 
-**4. Phosphor decay / Vectrex glow** — All vector lines (ships, bullets, UI borders) leave ~0.1s luminance trail via additive blend. Applies equally to `ui_panel_terminal()` border lines and gameplay geometry.
+**4. Phosphor decay / Vectrex glow** ✅ [DONE] — All vector lines (ships, bullets, UI borders) leave ~0.1s luminance trail via additive blend. Implemented via `vg_apply_persistence()` in `vector_graphics.c` — offscreen render target with exponential decay; 5-level `settings_glow` dial; called every frame at the top of `game_render()`.
 
 **5. Scanline shimmer** ✅ [DONE] — 1px horizontal sweep, 5–10% opacity, every 3–5s. Toggleable via `graphics.scanlines`. Applies only to gameplay viewport, not menu overlays.
 
@@ -59,7 +59,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **17. Emergency heat vent** ✅ [DONE] — Weapon overheat on rapid fire. Player-triggered coolant blowback: dense forward vector particles + instant reverse thrust, consumes fuel.
 
-**18. Gravity slingshot boosts** — Close orbit around heavy rifts gives free velocity boost. Tactical physics use.
+**18. Gravity slingshot boosts** ✅ [DONE] — Close orbit (150–380 u) around the void rift gives a continuous tangential velocity boost scaled by orbital depth and tangential speed. Fires only when the player is genuinely curving around the rift (|tan_v| > 30). Spawns a 3 s-cooldown "GRAVITY ASSIST" EventFloat + cyan particles on first entry.
 
 **19. Asteroid bowling combos** — Heavy projectile launches chain into larger rocks. `STRIKE!` float in ACID GREEN + multiplier.
 
