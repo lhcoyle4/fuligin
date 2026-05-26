@@ -249,6 +249,7 @@ typedef struct {
     float bullet_cooldown;
     float invuln_timer;
     float emp_lock_timer;          /* Item 25: EMP-locked seconds remaining     */
+    float sensor_static_timer;     /* Status: sensor blackout (blindness) secs  */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -750,6 +751,18 @@ static float solar_flare_warn_t     = 0.0f;   /* time remaining in WARNING phase
 static float solar_flare_active_t   = 0.0f;   /* time remaining in ACTIVE  phase   */
 static float solar_flare_next_iv    = 120.0f; /* rolled interval for current cycle */
 static int   solar_flare_in_shadow  = 0;      /* set each frame by shadow check    */
+
+/* --- Sensor Static (Blindness) status-malfunction roll state ---
+ * Driven from inside the Solar Flare ACTIVE phase: every few seconds,
+ * if the player is NOT in asteroid shadow, roll a random chance to
+ * scramble the sensors (minimap + DANGER readout blanked) for ~2.4s.
+ * Hiding in shadow prevents the scramble entirely — a second reward
+ * on top of the reduced fuel drain. */
+#define SENSOR_STATIC_DURATION   2.4f   /* seconds of blackout once triggered */
+#define SENSOR_STATIC_ROLL_MIN   3.5f   /* min seconds between scramble rolls */
+#define SENSOR_STATIC_ROLL_MAX   6.5f   /* max seconds between scramble rolls */
+#define SENSOR_STATIC_HIT_CHANCE 0.45f  /* per-roll probability of scramble  */
+static float sensor_static_roll_t = 0.0f;    /* countdown to next scramble roll */
 
 /* --- Screen shake --- */
 static float screen_shake_timer     = 0.0f;
@@ -1550,6 +1563,7 @@ static void reset_player(void)
     player.angle  = 0.0f;
     player.invuln_timer = 2.0f; /* 2 seconds invulnerability */
     player.emp_lock_timer = 0.0f; /* Item 25: clear EMP lock on respawn */
+    player.sensor_static_timer = 0.0f; /* Status: clear blindness on respawn */
 }
 
 /* ----------- Zone Classification ----------- */
@@ -2218,6 +2232,7 @@ void game_init()
     player.radius     = 8.0f;
     player.active     = 0;
     player.emp_lock_timer = 0.0f;
+    player.sensor_static_timer = 0.0f;
     player.trail_head = 0;
     for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
         player.trail_pos[i] = (Vec2){0.0f, 0.0f};
@@ -3234,6 +3249,16 @@ static void update_player_physics(float dt)
             is_thrusting = 0;
             player.emp_lock_timer -= dt;
             if (player.emp_lock_timer < 0.0f) player.emp_lock_timer = 0.0f;
+        }
+
+        /* ── Sensor Static (Blindness) tick ──────────────────────────────
+         * Pure timer decay: input is NOT suppressed (the pilot can still
+         * fly), but the HUD render code blanks the minimap and the
+         * proximity DANGER readout while > 0. Triggered by unshielded
+         * solar flare exposure in update_progression(). */
+        if (player.sensor_static_timer > 0.0f) {
+            player.sensor_static_timer -= dt;
+            if (player.sensor_static_timer < 0.0f) player.sensor_static_timer = 0.0f;
         }
 
         /* ── Singularity Displacer: double-tap thrust to rift-jump ── */
@@ -5348,9 +5373,43 @@ static void update_progression(float dt)
                 }
                 solar_flare_in_shadow = in_shadow;
             }
+            /* Sensor Static roll: while the flare is ACTIVE and the
+             * player is OUT of asteroid shadow, every few seconds we
+             * roll for a temporary sensor blackout (minimap + DANGER
+             * readout). Hiding in shadow short-circuits the roll. */
+            if (solar_flare_in_shadow == 0
+                && player.sensor_static_timer <= 0.0f)
+            {
+                sensor_static_roll_t -= dt;
+                if (sensor_static_roll_t <= 0.0f) {
+                    float r = (float)rand() / (float)RAND_MAX;
+                    if (r < SENSOR_STATIC_HIT_CHANCE) {
+                        player.sensor_static_timer = SENSOR_STATIC_DURATION;
+                        spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                          "SENSOR STATIC",
+                                          (SDL_Color){HUD_CINNABAR.r,
+                                                      HUD_CINNABAR.g,
+                                                      HUD_CINNABAR.b, 255});
+                        cugel9_say("SENSORS BLINDED BY STELLAR WIND. NAVIGATE BY INTUITION OR DESPAIR.");
+                        audio_play(SFX_EXPLOSION_SM);
+                    }
+                    /* Re-arm the roll regardless of outcome */
+                    {
+                        float t = (float)rand() / (float)RAND_MAX;
+                        sensor_static_roll_t = SENSOR_STATIC_ROLL_MIN
+                            + t * (SENSOR_STATIC_ROLL_MAX - SENSOR_STATIC_ROLL_MIN);
+                    }
+                }
+            } else if (solar_flare_in_shadow) {
+                /* While safely shadowed, hold the roll timer at a small
+                 * positive value so the very-next-frame post-shadow exit
+                 * doesn't instantly fire a scramble. */
+                if (sensor_static_roll_t < 1.0f) sensor_static_roll_t = 1.0f;
+            }
             if (solar_flare_active_t <= 0.0f) {
                 solar_flare_active_t = 0.0f;
                 solar_flare_in_shadow = 0;
+                sensor_static_roll_t = 0.0f; /* reset between flare cycles */
                 spawn_event_float(player.pos.x, player.pos.y - 32.0f,
                                   "FLARE PASSED",
                                   (SDL_Color){HUD_TEXT_CYAN.r,
@@ -6713,6 +6772,40 @@ static void render_minimap(void)
      * Border bumped to ACTIVE (full cyan) for stronger minimap visibility. */
     ui_panel_terminal(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_ACTIVE);
 
+    /* ── Sensor Static (Blindness) override ─────────────────────────────
+     * While the blackout timer is active, replace the minimap interior
+     * with sparse cyan/cinnabar pixel noise + a "[NO SIGNAL]" label.
+     * The panel frame still draws above so the readout location stays
+     * recognisable. Reads as "raster snow" rather than a missing UI. */
+    if (player.sensor_static_timer > 0.0f) {
+        SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
+        /* Confine noise to the panel interior */
+        float nx0 = panel_x + 4.0f;
+        float ny0 = panel_y + 4.0f;
+        float nw  = panel_w - 8.0f;
+        float nh  = panel_h - 8.0f;
+        /* Density and seed shift each frame for shimmer */
+        int   speckles = (int)(nw * nh * 0.018f);
+        for (int s = 0; s < speckles; s++) {
+            int rx = rand() % (int)nw;
+            int ry = rand() % (int)nh;
+            int hue = rand() & 7;
+            Uint8 a = 90 + (rand() & 0x3F);
+            SDL_Color c = (hue < 5) ? HUD_TEXT_CYAN : HUD_CINNABAR;
+            SDL_SetRenderDrawColor(g_renderer, c.r, c.g, c.b, a);
+            SDL_RenderDrawPoint(g_renderer, (int)(nx0 + rx), (int)(ny0 + ry));
+        }
+        /* Pulsed "[NO SIGNAL]" overlay centred in the panel */
+        float pulse = (sinf(game_time * 14.0f) + 1.0f) * 0.5f;
+        SDL_Color label = HUD_CINNABAR;
+        label.a = (Uint8)(140.0f + 90.0f * pulse);
+        vf_draw_string_centered("[NO SIGNAL]",
+                                panel_x + panel_w * 0.5f,
+                                panel_y + panel_h * 0.5f - 6.0f,
+                                9, label);
+        return; /* skip the live blip rendering below */
+    }
+
     /* Header */
     vf_draw_string("[MINIMAP]", panel_x + HUD_PAD_INNER,
                    panel_y + HUD_PAD_INNER, 9, HUD_TEXT_DIM);
@@ -7107,8 +7200,11 @@ static void render_overlays(void)
 
     /* ── Proximity Danger Alert ──────────────────────────────────────
      * Pulses ">>> DANGER <<<" in Cinnabar at screen-bottom when any
-     * active UFO is within 520 world-units of the player. */
-    if (game_state == STATE_PLAYING && ufo.active && player.active) {
+     * active UFO is within 520 world-units of the player. Suppressed
+     * while Sensor Static is active — proximity data lives on the same
+     * sensor stack that the blackout takes offline. */
+    if (game_state == STATE_PLAYING && ufo.active && player.active
+        && player.sensor_static_timer <= 0.0f) {
         float edx  = ufo.pos.x - player.pos.x;
         float edy  = ufo.pos.y - player.pos.y;
         float edist = sqrtf(edx * edx + edy * edy);
