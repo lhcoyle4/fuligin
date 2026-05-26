@@ -93,7 +93,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 ## ⚪ Settings / Infrastructure
 
-**29. Settings menu** *(FF7R menu style)* — Full-screen overlay using `ui_panel_menu()` throughout. Tab bar across top with diagonal-cut active tab indicator. Row navigation with `>` chevron. Sliders and toggles use the ATB-style segmented bar from `FULIGIN_HUD_DESIGN_BRIEF.md` §1A. Reference: `FULIGIN_Settings_Spec.md` for full field list.
+**29. Settings menu** *(FF7R structure + Caves of Qud visual style)* — Full-screen overlay with FF7R-style tab-based navigation and interactability: tab bar across top, `>` chevron row cursor, keyboard/controller nav between rows, segmented sliders for numeric values, toggle switches for booleans. Visual rendering uses the terminal/Qud aesthetic throughout: `ui_panel_terminal()` bracket-corner panels, `Share Tech Mono` monospace font, `#88ccff` cyan label text, `#39FF14` acid-green current values, `#FF00FF` magenta `[CATEGORY]` section headers, `#001100` dark track on slider fills. No diagonal panel cuts — rectangular terminal panels only. Reference: `FULIGIN_Settings_Spec.md` for full field list; `FULIGIN_HUD_DESIGN_BRIEF.md` §1B for bar/slider spec. **After the settings menu is complete, audit and retrofit all other menus, overlays, and non-HUD UI elements (title screen, pause menu, upgrade selection, high score screen, reliquary shop) to the same Qud terminal visual style — monospace, bracket corners, acid green values, magenta category tags. The FF7R angled-panel aesthetic is retired in favour of a unified terminal look across the entire game.**
 
 **30. Consolidate Settings struct** — Reconcile `GameSettings` (spec) with current `Settings` in `game.h`. One canonical struct, one `.cfg` file.
 
