@@ -645,6 +645,13 @@ static float xp_flash_timer            = 0.0f;
 static int   combo_count = 0;
 static float combo_timer  = 0.0f;
 
+/* --- Bowling combo system (item 19) --- */
+/* bowling_timer[i] > 0 means asteroid slot i is an active bowling fragment */
+static float bowling_timer[MAX_ASTEROIDS];
+static int   bowling_chain_count = 0;
+static float bowling_chain_timer = 0.0f;
+static int   g_bowling_next_spawn = 0; /* when 1, next spawn_asteroid() marks slot as bowling */
+
 /* --- Score floaters --- */
 static ScoreFloat score_floats[MAX_SCORE_FLOATS];
 
@@ -1382,6 +1389,8 @@ static void spawn_asteroid(Vec2 pos, int size)
         if (!asteroids[i].active) {
             asteroids[i].active = 1;
             asteroids[i].pos    = pos;
+            /* Tag as bowling fragment when requested by the collision system */
+            bowling_timer[i]    = g_bowling_next_spawn ? 1.5f : 0.0f;
 
             float angle       = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
             float speed_scale = 1.0f + (difficulty * 0.3f);
@@ -1841,8 +1850,11 @@ static void start_new_game()
     for (int i = 0; i < MAX_SCORE_FLOATS; i++) score_floats[i].active = 0;
     for (int i = 0; i < MAX_EVENT_FLOATS; i++)  event_floats[i].active  = 0;
 
-    combo_count = 0;
-    combo_timer = 0.0f;
+    combo_count         = 0;
+    combo_timer         = 0.0f;
+    bowling_chain_count = 0;
+    bowling_chain_timer = 0.0f;
+    for (int i = 0; i < MAX_ASTEROIDS; i++) bowling_timer[i] = 0.0f;
     ufo.active  = 0;
     wave_asteroids_destroyed = 0;
     wave_cleared_pending     = 0;
@@ -4018,10 +4030,13 @@ static void update_particles_orbs_npcs(float dt)
  *  Collision pairs evaluated each frame (in priority order):
  *    1. Player bolts vs Void Stones — scoring, splitting, combo multiplier,
  *       Nova Shell burst, Resonance Cascade shockwave, Split Shot fragments.
+ *       Spawned fragments are tagged as bowling balls for section 6.
  *    2. UFO bolts vs Void Stones   — silent destruction, split logic.
  *    3. Player bolts vs UFO        — destroys vessel, XP orb shower.
  *    4. Player hull vs Void Stones — death or shield absorption.
  *    5. Player hull vs UFO/bullets — death, shield, Phase Shift, mirror decoy.
+ *    6. Bowling Combos             — bowling_timer fragments vs other stones:
+ *       chain counter, STRIKE! float, bonus score × chain depth.
  *
  *  The combo multiplier follows a step function:
  *    combo_count > 4  → ×4   (Void Fury)
@@ -4034,8 +4049,6 @@ static void update_particles_orbs_npcs(float dt)
  */
 static void update_collisions(float dt)
 {
-    (void)dt; /* Collision resolution is position-based, not time-stepped */
-
     /* ── 1. Player bolts vs Void Stones ──────────────────────────── */
     for (int b = 0; b < MAX_BULLETS; b++) {
         if (!bullets[b].active) continue;
@@ -4179,10 +4192,12 @@ static void update_collisions(float dt)
                         : (asteroids[a].size == 2) ?  5 : 2;
             spawn_orb(asteroids[a].pos, orb_val);
 
-            /* Split into two smaller stones */
+            /* Split into two smaller stones — tag fragments as bowling balls */
             if (next_size >= 1) {
+                g_bowling_next_spawn = 1;
                 spawn_asteroid(asteroids[a].pos, next_size);
                 spawn_asteroid(asteroids[a].pos, next_size);
+                g_bowling_next_spawn = 0;
                 audio_play(asteroids[a].size == 3
                            ? SFX_EXPLOSION_MD : SFX_EXPLOSION_SM);
             } else {
@@ -4381,6 +4396,84 @@ static void update_collisions(float dt)
                     }
                 }
                 break;
+            }
+        }
+    }
+
+    /* ── 6. Bowling Combos: bullet-spawned fragments vs other Void Stones ── */
+    /*
+     *  When a player bullet destroys an asteroid, its child fragments are tagged
+     *  with bowling_timer > 0.  While that timer is live, if a fragment collides
+     *  with another asteroid the chain counter increments: each subsequent collision
+     *  keeps the chain alive, spawns a STRIKE! event float, and awards bonus score
+     *  that scales with chain depth.  The chain resets if no new collision happens
+     *  within bowling_chain_timer seconds.
+     */
+    {
+        /* Decay the chain window — reset chain count when window expires */
+        if (bowling_chain_timer > 0.0f) {
+            bowling_chain_timer -= dt;
+            if (bowling_chain_timer <= 0.0f) bowling_chain_count = 0;
+        }
+
+        for (int ba = 0; ba < MAX_ASTEROIDS; ba++) {
+            if (!asteroids[ba].active) continue;
+            if (bowling_timer[ba] <= 0.0f) continue;
+            bowling_timer[ba] -= dt;
+
+            for (int bb = 0; bb < MAX_ASTEROIDS; bb++) {
+                if (bb == ba) continue;
+                if (!asteroids[bb].active) continue;
+                if (!check_collision(asteroids[ba].pos, asteroids[ba].radius,
+                                     asteroids[bb].pos, asteroids[bb].radius))
+                    continue;
+
+                /* ── Chain hit confirmed! ── */
+                bowling_chain_count++;
+                bowling_chain_timer = 1.0f; /* extend window for next link */
+
+                Vec2 hit_mid = {
+                    (asteroids[ba].pos.x + asteroids[bb].pos.x) * 0.5f,
+                    (asteroids[ba].pos.y + asteroids[bb].pos.y) * 0.5f
+                };
+
+                /* Score: base points × chain depth */
+                int pts_b = ((asteroids[bb].size == 3) ? 30
+                           : (asteroids[bb].size == 2) ? 75 : 150)
+                           * bowling_chain_count;
+                score += pts_b;
+
+                /* Destroy the struck Void Stone — spawn as new bowling fragments */
+                int next_b = asteroids[bb].size - 1;
+                asteroids[bb].active = 0;
+                wave_asteroids_destroyed++;
+                spawn_particles(asteroids[bb].pos, 22,
+                                (SDL_Color){57, 255, 20, 210});
+
+                if (next_b >= 1) {
+                    g_bowling_next_spawn = 1; /* tag new fragments as bowling balls */
+                    spawn_asteroid(asteroids[bb].pos, next_b);
+                    spawn_asteroid(asteroids[bb].pos, next_b);
+                    g_bowling_next_spawn = 0;
+                    audio_play(SFX_EXPLOSION_MD);
+                } else {
+                    audio_play(SFX_EXPLOSION_SM);
+                }
+
+                /* STRIKE! event float above the impact midpoint */
+                spawn_event_float(hit_mid.x, hit_mid.y - 30.0f,
+                                  "STRIKE!",
+                                  (SDL_Color){57, 255, 20, 240});
+
+                /* Extra rumble on multi-chain hits */
+                if (bowling_chain_count >= 2) {
+                    screen_shake_timer     = 0.25f;
+                    screen_shake_intensity = 5.0f;
+                }
+
+                /* The bowling-ball fragment keeps flying — refresh its window */
+                bowling_timer[ba] = 0.7f;
+                break; /* one chain link per bowling ball per frame */
             }
         }
     }
