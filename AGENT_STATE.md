@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Parallel: (26) Cugel-9 board computer text log + (31) CRT glass curvature corner reflections
+- **Locked Files**: src/cugel9.c, include/cugel9.h, src/vector_graphics.c, include/vector_graphics.h, src/game.c, include/game.h, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
