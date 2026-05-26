@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: UI overhaul foundation — ui_panel_terminal/ui_panel_menu primitives + retrofit HUD and top-level menus to unified Qud-terminal style; remove duplicate/off-style UI
-- **Locked Files**: src/ui.c, include/ui.h, src/game.c, FULIGIN_ACTION_LIST.md, todo.md, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -44,3 +44,4 @@
 | Claude | Mark items 3 (segmented bars), 4 (phosphor decay), 18 (slingshot) as done in action list | agent/claude | 2026-05-25 |
 | Claude | Fuel Clock: passive reactor drain + Emergency Drift Mode (thrust block, hull breach at 10s) | agent/claude | 2026-05-25 |
 | Claude | Asteroid Bowling Combos: bowling_timer fragments chain into rocks, STRIKE! float + score multiplier per chain depth | agent/claude | 2026-05-25 |
+| Claude | UI Overhaul Foundation: ui_panel_terminal() + ui_panel_menu() primitives; all 12 ui_panel() calls across menus/overlays/minimap replaced with terminal variant | agent/claude | 2026-05-25 |

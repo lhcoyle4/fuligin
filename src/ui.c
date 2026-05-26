@@ -250,6 +250,137 @@ void ui_panel_angled(SDL_Renderer *r, float x, float y, float w, float h,
 }
 
 /**
+ * @brief Draw a rectangular Qud/Noctis terminal panel.
+ *        See ui.h for full documentation.
+ *
+ *  Visual recipe:
+ *    1. Deep near-black interior fill (HUD_PANEL_DEEP).
+ *    2. Subtle CRT scanlines over the interior.
+ *    3. Dim continuous 1px outline in the accent color at low alpha — it
+ *       defines the rectangle without dominating the eye.
+ *    4. Four bright 8px L-shaped bracket-corner marks at the corners, drawn
+ *       at the accent color's full alpha.  This is the Qud signature.
+ *
+ *  No diagonal cuts.  No multi-pass glow halo (the brackets carry the
+ *  emphasis instead).  This is the unified primitive for ALL non-overlay UI
+ *  per action-list items #1 and #29.
+ */
+void ui_panel_terminal(SDL_Renderer *r, float x, float y, float w, float h,
+                       SDL_Color accent)
+{
+    SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+
+    /* ── Deep terminal-glass fill ───────────────────────── */
+    {
+        SDL_Color fill = HUD_PANEL_DEEP;
+        set_color(r, fill);
+        SDL_FRect fr = { x + 1.0f, y + 1.0f, w - 2.0f, h - 2.0f };
+        SDL_RenderFillRectF(r, &fr);
+    }
+
+    /* ── CRT scanlines over interior ────────────────────── */
+    ui_scanlines(r, x + 1.0f, y + 1.0f, w - 2.0f, h - 2.0f);
+
+    /* ── Dim continuous border: defines the rectangle ───── */
+    {
+        SDL_Color dim = { accent.r, accent.g, accent.b, 70 };
+        set_color(r, dim);
+        draw_rect_outline(r, x, y, w, h);
+    }
+
+    /* ── Bracket-corner marks — the Qud signature ──────── */
+    {
+        const float A = 8.0f;       /* arm length per corner */
+        set_color(r, accent);
+
+        /* Top-left  ┌ */
+        SDL_RenderDrawLineF(r, x,             y,             x + A,         y);
+        SDL_RenderDrawLineF(r, x,             y,             x,             y + A);
+
+        /* Top-right ┐ */
+        SDL_RenderDrawLineF(r, x + w - A,     y,             x + w,         y);
+        SDL_RenderDrawLineF(r, x + w,         y,             x + w,         y + A);
+
+        /* Bottom-left  └ */
+        SDL_RenderDrawLineF(r, x,             y + h - A,     x,             y + h);
+        SDL_RenderDrawLineF(r, x,             y + h,         x + A,         y + h);
+
+        /* Bottom-right ┘ */
+        SDL_RenderDrawLineF(r, x + w,         y + h - A,     x + w,         y + h);
+        SDL_RenderDrawLineF(r, x + w - A,     y + h,         x + w,         y + h);
+    }
+}
+
+/**
+ * @brief Draw a terminal-style menu panel with a centered title divider.
+ *        See ui.h for full documentation.
+ *
+ *  Implementation: ui_panel_terminal() for the frame + ui_section_divider()
+ *  for the `──── TITLE ────` header.  Per action-list item #29, this is the
+ *  single primitive every menu overlay (pause, settings, reliquary, warp,
+ *  high scores, game-over) should converge on.  The old FF7R angled-cut
+ *  menu look is retired.
+ */
+void ui_panel_menu(SDL_Renderer *r, float x, float y, float w, float h,
+                   const char *title, SDL_Color accent)
+{
+    ui_panel_terminal(r, x, y, w, h, accent);
+
+    if (title && title[0]) {
+        /* Title sits 8px below the top edge — clear of the corner brackets */
+        ui_section_divider(r, x + 4.0f, y + 8.0f, w - 8.0f, title, accent);
+    }
+}
+
+/**
+ * @brief Draw a `[LABEL]  VALUE` row in the unified terminal style.
+ *        See ui.h for full documentation.
+ *
+ *  The label is wrapped in literal `[` and `]` characters and rendered with
+ *  the vector stroke font at the requested size.  The value is right-aligned
+ *  inside the row by computing its pixel width with the same `strlen * 5`
+ *  approximation ui_section_divider() uses (per-character width scales
+ *  linearly with the requested font size relative to size 9).
+ *
+ *  This is the canonical row primitive for HUD readouts — score, fuel,
+ *  hull, ammo, zone, level — and replaces ad-hoc vf_draw_string pairs
+ *  scattered across game.c's render functions.
+ */
+void ui_text_label_value(SDL_Renderer *r, float x, float y, float w,
+                         const char *label, const char *value,
+                         SDL_Color label_c, SDL_Color value_c, int size)
+{
+    (void)r;  /* All drawing goes through vf_draw_string — renderer is global */
+
+    if (!label) label = "";
+    if (!value) value = "";
+
+    /* Build "[LABEL]" into a small stack buffer */
+    char lbuf[40];
+    size_t n = 0;
+    lbuf[n++] = '[';
+    for (size_t i = 0; label[i] != '\0' && n < sizeof(lbuf) - 2; i++) {
+        lbuf[n++] = label[i];
+    }
+    lbuf[n++] = ']';
+    lbuf[n]   = '\0';
+
+    vf_draw_string(lbuf, x, y, size, label_c);
+
+    /* Estimate value pixel width — match ui_section_divider's convention:
+     * ~5px per character at size 9, scaled linearly by size. */
+    float char_w = (float)size * (5.0f / 9.0f);
+    float val_w  = (float)strlen(value) * char_w;
+    float val_x  = x + w - val_w;
+
+    /* Defensive clamp: don't let the value overlap the label */
+    float label_end = x + (float)n * char_w + 4.0f;
+    if (val_x < label_end) val_x = label_end;
+
+    vf_draw_string(value, val_x, y, size, value_c);
+}
+
+/**
  * @brief Draw a small section-header label inside a panel with a separator.
  *        See ui.h for full documentation.
  */

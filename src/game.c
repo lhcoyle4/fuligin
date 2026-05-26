@@ -2722,18 +2722,6 @@ static void handle_input_upgrade(SDL_Event *event)
             game_state = is_attract_ai ? STATE_ATTRACT_GAMEPLAY : STATE_PLAYING;
             if (ufo.active) audio_play(SFX_UFO_LOOP);
         }
-    } else if (event->type == SDL_KEYDOWN) {
-        SDL_Keycode sym = event->key.keysym.sym;
-        if (sym == SDLK_LEFT || sym == SDLK_a || sym == SDLK_UP || sym == SDLK_w)
-            selected_option = (selected_option + 2) % 3;
-        if (sym == SDLK_RIGHT || sym == SDLK_d || sym == SDLK_DOWN || sym == SDLK_s)
-            selected_option = (selected_option + 1) % 3;
-        if (sym == SDLK_RETURN || sym == SDLK_SPACE) {
-            apply_upgrade(upgrade_options[selected_option]);
-            if (wave_cleared_pending) { wave_cleared_pending = 0; start_next_level(); }
-            game_state = is_attract_ai ? STATE_ATTRACT_GAMEPLAY : STATE_PLAYING;
-            if (ufo.active) audio_play(SFX_UFO_LOOP);
-        }
     }
 }
 
@@ -3059,7 +3047,7 @@ static void update_player_physics(float dt)
                     player.angle -= ROTATION_SPEED * dt;
                 if (keys[keybinds[KB_ROTATE_RIGHT]] || keys[SDL_SCANCODE_D])
                     player.angle += ROTATION_SPEED * dt;
-                if (keys[keybinds[KB_THRUST]] || keys[SDL_SCANCODE_W] || keys[SDL_SCANCODE_S] || keys[SDL_SCANCODE_UP] || keys[SDL_SCANCODE_DOWN]
+                if (keys[keybinds[KB_THRUST]] || keys[SDL_SCANCODE_W]
                     || (settings_mouse_aim
                         && (mouse_buttons & SDL_BUTTON(g_settings.controls.mouse_thrust_btn))))
                     thrust_key_down = 1;
@@ -5870,8 +5858,8 @@ static void render_minimap(void)
     float panel_h = (float)HUD_TR_H;
     SDL_Color mm_zone_col = ui_zone_color(player_zone);
 
+    /* ui_panel_terminal already draws interior scanlines — no duplicate pass */
     ui_panel_terminal(g_renderer, panel_x, panel_y, panel_w, panel_h, HUD_BORDER_MAIN);
-    ui_scanlines(g_renderer, panel_x, panel_y, panel_w, panel_h);
 
     /* Header */
     vf_draw_string("[MINIMAP]", panel_x + HUD_PAD_INNER,
@@ -5895,9 +5883,8 @@ static void render_minimap(void)
     float scy  = mmh / (range * 2.0f);
     float mcx  = mmx + mmw * 0.5f;
     float mcy  = mmy + mmh * 0.5f;
-    float mm_rad = (mmw < mmh ? mmw : mmh) * 0.5f - 4.0f;
 
-    /* Draw grid cell background (clipped to circle) */
+    /* Draw grid cell background */
     SDL_SetRenderDrawBlendMode(g_renderer, SDL_BLENDMODE_BLEND);
     SDL_SetRenderDrawColor(g_renderer,
         HUD_PANEL_DEEP.r, HUD_PANEL_DEEP.g, HUD_PANEL_DEEP.b, HUD_PANEL_DEEP.a);
@@ -5907,47 +5894,18 @@ static void render_minimap(void)
         int rows_mm = (int)(mmh / cell_sz);
         for (int rr = 0; rr < rows_mm; rr++) {
             for (int cc = 0; cc < cols; cc++) {
-                float cx = mmx + cc * cell_sz;
-                float cy = mmy + rr * cell_sz;
-                float dx = cx - mcx;
-                float dy = cy - mcy;
-                if (dx*dx + dy*dy <= mm_rad*mm_rad) {
-                    SDL_FRect cell = { cx, cy, 4.0f, 4.0f };
-                    SDL_RenderFillRectF(g_renderer, &cell);
-                }
+                SDL_FRect cell = { mmx + cc * cell_sz, mmy + rr * cell_sz, 4.0f, 4.0f };
+                SDL_RenderFillRectF(g_renderer, &cell);
             }
         }
     }
     (void)mm_zone_col;
 
-    /* Radar sweep line & border */
-    float radar_angle = SDL_GetTicks() * 0.001f * 1.5f;
-    SDL_SetRenderDrawColor(g_renderer, 0, 150, 0, 100);
-    SDL_RenderDrawLineF(g_renderer, mcx, mcy, mcx + sinf(radar_angle) * mm_rad, mcy - cosf(radar_angle) * mm_rad);
-    SDL_SetRenderDrawColor(g_renderer, HUD_BORDER_MID.r, HUD_BORDER_MID.g, HUD_BORDER_MID.b, 150);
-    for (int i=0; i<32; i++) {
-        float a1 = (i/32.0f) * M_PI * 2.0f;
-        float a2 = ((i+1)/32.0f) * M_PI * 2.0f;
-        SDL_RenderDrawLineF(g_renderer, mcx + sinf(a1)*mm_rad, mcy - cosf(a1)*mm_rad, mcx + sinf(a2)*mm_rad, mcy - cosf(a2)*mm_rad);
-    }
-
-    /* Helper macro for fading blips */
-    #define RADAR_FADE(bx, by) \
-        int alpha = 255; \
-        float bang = atan2f((bx) - mcx, -((by) - mcy)); \
-        float adiff = radar_angle - bang; \
-        while(adiff > M_PI) adiff -= M_PI*2.0f; \
-        while(adiff < -M_PI) adiff += M_PI*2.0f; \
-        if (adiff < 0) adiff += M_PI*2.0f; \
-        alpha = (int)(255.0f * (1.0f - adiff / (M_PI*2.0f))); \
-        if (alpha < 40) alpha = 40;
-
     /* Home station — cyan cross */
     {
         float hx = mcx + (0.0f - player.pos.x) * scx;
         float hy = mcy + (0.0f - player.pos.y) * scy;
-        float dx = hx - mcx; float dy = hy - mcy;
-        if (dx*dx + dy*dy <= mm_rad*mm_rad) {
+        if (hx >= mmx && hx <= mmx + mmw && hy >= mmy && hy <= mmy + mmh) {
             Line hl[2] = {{{hx - 6, hy}, {hx + 6, hy}},
                           {{hx, hy - 6}, {hx, hy + 6}}};
             for (int i = 0; i < 2; i++) {
@@ -5962,20 +5920,16 @@ static void render_minimap(void)
         if (!asteroids[i].active) continue;
         float ax = mcx + (asteroids[i].pos.x - player.pos.x) * scx;
         float ay = mcy + (asteroids[i].pos.y - player.pos.y) * scy;
-        float dx = ax - mcx; float dy = ay - mcy;
-        if (dx*dx + dy*dy > mm_rad*mm_rad) continue;
-        RADAR_FADE(ax, ay);
-        ui_minimap_blip(g_renderer, ax, ay, (SDL_Color){255, 255, 255, alpha}, 1.0f);
+        if (ax < mmx || ax > mmx + mmw || ay < mmy || ay > mmy + mmh) continue;
+        ui_minimap_blip(g_renderer, ax, ay, (SDL_Color){255, 255, 255, 255}, 1.0f);
     }
 
     /* Enemy (UFO) - Red radar blips */
     if (ufo.active) {
         float ux = mcx + (ufo.pos.x - player.pos.x) * scx;
         float uy = mcy + (ufo.pos.y - player.pos.y) * scy;
-        float dx = ux - mcx; float dy = uy - mcy;
-        if (dx*dx + dy*dy <= mm_rad*mm_rad) {
-            RADAR_FADE(ux, uy);
-            ui_minimap_blip(g_renderer, ux, uy, (SDL_Color){255, 0, 0, alpha}, 2.0f);
+        if (ux >= mmx && ux <= mmx + mmw && uy >= mmy && uy <= mmy + mmh) {
+            ui_minimap_blip(g_renderer, ux, uy, (SDL_Color){255, 0, 0, 255}, 2.0f);
         }
     }
 
@@ -5983,10 +5937,8 @@ static void render_minimap(void)
     if (rift.active) {
         float rx = mcx + (rift.pos.x - player.pos.x) * scx;
         float ry = mcy + (rift.pos.y - player.pos.y) * scy;
-        float dx = rx - mcx; float dy = ry - mcy;
-        if (dx*dx + dy*dy <= mm_rad*mm_rad) {
-            RADAR_FADE(rx, ry);
-            ui_minimap_blip(g_renderer, rx, ry, (SDL_Color){160, 32, 240, alpha}, 3.0f);
+        if (rx >= mmx && rx <= mmx + mmw && ry >= mmy && ry <= mmy + mmh) {
+            ui_minimap_blip(g_renderer, rx, ry, (SDL_Color){160, 32, 240, 255}, 3.0f);
         }
     }
 
@@ -5995,10 +5947,8 @@ static void render_minimap(void)
         if (!npcs[i].active) continue;
         float nx = mcx + (npcs[i].pos.x - player.pos.x) * scx;
         float ny = mcy + (npcs[i].pos.y - player.pos.y) * scy;
-        float dx = nx - mcx; float dy = ny - mcy;
-        if (dx*dx + dy*dy > mm_rad*mm_rad) continue;
-        RADAR_FADE(nx, ny);
-        ui_minimap_blip(g_renderer, nx, ny, (SDL_Color){20, 180, 20, alpha}, 2.0f);
+        if (nx < mmx || nx > mmx + mmw || ny < mmy || ny > mmy + mmh) continue;
+        ui_minimap_blip(g_renderer, nx, ny, (SDL_Color){20, 180, 20, 255}, 2.0f);
     }
 
     /* Player — bright cyan 3×3 rect at map centre */

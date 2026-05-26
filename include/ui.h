@@ -162,6 +162,80 @@ void ui_panel_angled(SDL_Renderer *r, float x, float y, float w, float h,
                      float cut, SDL_Color border);
 
 /**
+ * @brief Draw a rectangular Qud/Noctis terminal-style panel.
+ *
+ * This is the unified primitive for ALL in-game UI per action-list items
+ * #1 and #29 (the FF7R angled-cut aesthetic is retired in favour of a single
+ * terminal look across HUD, menus, overlays, and dialogs).
+ *
+ * Geometry:
+ *   - Axis-aligned rectangle, no diagonal cuts.
+ *   - Deep near-black fill (HUD_PANEL_DEEP) for terminal contrast.
+ *   - Dim continuous border (accent at low alpha) — visible but quiet.
+ *   - Bright bracket-corner marks at the four corners (the Qud signature):
+ *     8px L-shapes drawn in the accent color at full alpha.
+ *   - Subtle CRT scanlines over the interior at very low alpha.
+ *
+ * Use ui_panel_menu() instead when you need a centered title divider on top.
+ *
+ * @param r       SDL renderer
+ * @param x,y     Top-left screen pixel
+ * @param w,h     Panel dimensions in pixels
+ * @param accent  Primary accent color — bracket corners + title.  Pick a zone
+ *                accent (HUD_ZONE_ACCENT[zone]) or HUD_BORDER_ACTIVE for hot.
+ */
+void ui_panel_terminal(SDL_Renderer *r, float x, float y, float w, float h,
+                       SDL_Color accent);
+
+/**
+ * @brief Draw a terminal-style menu panel with a centered title header.
+ *
+ * Wraps ui_panel_terminal() and adds a `──── TITLE ────` centered divider
+ * at the top using ui_section_divider().  Use for full-screen menu overlays
+ * (pause, settings, reliquary, warp, high scores) and for in-world floating
+ * dialogs that need a visible heading.
+ *
+ * Per action-list item #29: this REPLACES the retired FF7R-style angled
+ * menu panel.  All menus across the game should converge on this primitive.
+ *
+ * @param r       SDL renderer
+ * @param x,y     Top-left screen pixel
+ * @param w,h     Panel dimensions in pixels (h must be >= 28px for header)
+ * @param title   ALL-CAPS title string (NULL or "" suppresses the header)
+ * @param accent  Primary accent color — borders, brackets, title text
+ */
+void ui_panel_menu(SDL_Renderer *r, float x, float y, float w, float h,
+                   const char *title, SDL_Color accent);
+
+/**
+ * @brief Draw a `[LABEL: VALUE]` row in the unified terminal style.
+ *
+ * Renders three elements on one row at y:
+ *   - "[" `label` "]" left-aligned at column `label_col` (HUD_TEXT_DIM).
+ *   - ":" separator (optional, embedded in the label).
+ *   - `value` text right-aligned at column `value_col_end` (color `value_col`).
+ *
+ * The brackets are drawn as text (not vector L-shapes) so they sit on the
+ * vector-font baseline correctly.  Use HUD_COL_W for column alignment.
+ *
+ * Example call for a HUD row at (x, y, w):
+ *   ui_text_label_value(r, x, y, w, "HULL", "142/200",
+ *                       HUD_TEXT_DIM, HUD_TEXT_PRIMARY, 9);
+ *
+ * @param r        SDL renderer
+ * @param x,y      Row origin (top-left)
+ * @param w        Row width — the value is right-aligned within this
+ * @param label    ALL-CAPS label string (rendered as `[LABEL]`)
+ * @param value    Value string (typically numeric, ALL-CAPS for text)
+ * @param label_c  Color for the bracketed label (typically HUD_TEXT_DIM)
+ * @param value_c  Color for the value (typically HUD_TEXT_PRIMARY or accent)
+ * @param size     Vector-font size in pixels (typically 9)
+ */
+void ui_text_label_value(SDL_Renderer *r, float x, float y, float w,
+                         const char *label, const char *value,
+                         SDL_Color label_c, SDL_Color value_c, int size);
+
+/**
  * @brief Draw a small ALL-CAPS section label at the top of a panel.
  *        Renders a dim hairline separator beneath the text.
  *
