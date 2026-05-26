@@ -4,8 +4,8 @@
 ## Agent: Claude (Anthropic)
 - **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: Item 25 — EMP Sentinels (new enemy module with EM-pulse status effect on player)
-- **Locked Files**: src/enemy_emp_sentinel.c (new), include/enemy_emp_sentinel.h (new), src/game.c, Makefile, include/state.h
+- **Active Task**: Star-Shadow Radiation Shielding (todo.md §3 / Lore §3) — extend Solar Flare drain with asteroid-shadow soak + vector shadow-line visual
+- **Locked Files**: src/game.c
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
