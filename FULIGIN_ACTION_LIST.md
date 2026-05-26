@@ -1,110 +1,87 @@
-# FULIGIN — Action List
+# FULIGIN Action List & Consolidated Roadmap
 
-## Style Authority Files
-Every UI implementation must reference these two sources before touching a pixel:
-- **`vibe_presentation.html`** / **`FULIGIN_Guide.pdf`** — canonical visual mockups. Pages 2 and 5 of the PDF show the in-game Qud/Noctis style; page 4 shows the title screen.
-- **`FULIGIN_HUD_DESIGN_BRIEF.md`** — detailed spec for FF7R panel geometry, bar sizing, glow values, and color hex codes.
-
-## The Two-Style Rule
-
-**In-game HUD, inventory, item cards, tooltips, Cugel-9 logs, resource readouts** → **Caves of Qud / Noctis terminal aesthetic**: monospace (`Share Tech Mono`), bracket-corner rectangular panels, `[LABEL: VALUE]` notation, acid green data values, cyan structure lines, magenta category tags, all-caps.
-
-**Main menu, pause menu, settings, reliquary selection, shop, warp screen** → **FF7 Remake menu aesthetic**: angled parallelogram panels with ~20° diagonal corner cuts, thin 1px URTH CYAN glowing borders, segmented gauge bars, chevron `>` active-state markers, dark near-black glassmorphism fill.
+This document merges the foundational features from Claude (previously in `todo.md`) with the new stylistic guidelines from Antigravity. The UI approach synthesizes the *Caves of Qud* terminal aesthetic with the *Final Fantasy VII Remake* (FF7R) geometry and layout, using the *Noctis* color palette.
 
 ---
 
-## 🔴 Core Systems
+## 1. HUD & Cockpit UI Overhaul
+**Style Rule:** *Primarily Caves of Qud terminal aesthetic + Noctis colors/fonts, secondarily FF7R geometry.*
 
-**1. dcimgui integration** — Replace all SDL2 hand-drawn UI with dcimgui. Implement two panel primitives as the foundation for everything else:
-- `ui_panel_terminal()` — Qud/Noctis style: rectangular, bracket-style corner marks (`┌`, `┐`, `└`, `┘` drawn as 8px L-shapes), `#88ccff` 1px border, `#050505` fill, `Share Tech Mono` font. Used for all in-game HUD elements, inventory, tooltips, Cugel-9 log. Visual reference: `FULIGIN_Guide.pdf` p.5 inventory grid.
-- `ui_panel_menu()` — FF7R style: parallelogram with top-left ~20px diagonal clip, `#00FFFF` 1px glowing border, CHONDRITE GREY at 35% opacity fill, `Orbitron` or equivalent geometric sans for headers. Used for all menu/settings/shop screens. Visual reference: `FULIGIN_HUD_DESIGN_BRIEF.md` §1A + `FULIGIN_Guide.pdf` p.4 title screen.
-
-**2. HUD panel geometry** *(terminal style — Qud/Noctis)* — Score, fuel, ammo, chronicle bar, reliquary count, zone indicator all use `ui_panel_terminal()`. No diagonal cuts on combat HUD. Monospace labels in `#88ccff` cyan; data values in `#39FF14` acid green; category/type tags in `#FF00FF` magenta using `[BRACKET]` notation. Reference: `FULIGIN_Guide.pdf` p.2 item cards and p.5 inventory UI.
-
-**3. Segmented / block progress bars** ✅ [DONE] *(terminal style)* — `ui_bar_segmented()` for Chronicle/XP: acid green fill, discrete block segments per 10%, dark `#001100` track, 1px tight border. `ui_bar_block()` for hull/shields. Danger ramp on fuel/hull: `#39FF14` → `#FF8C00` at 30% → `#E34234` at 15%. Label format: `FUEL: 847 / 1200` (monospace, label dim, value bright). Reference: `FULIGIN_HUD_DESIGN_BRIEF.md` §1B Qud bar spec.
-
----
-
-## 🟠 Visual Polish
-
-**4. Phosphor decay / Vectrex glow** ✅ [DONE] — All vector lines (ships, bullets, UI borders) leave ~0.1s luminance trail via additive blend. Implemented via `vg_apply_persistence()` in `vector_graphics.c` — offscreen render target with exponential decay; 5-level `settings_glow` dial; called every frame at the top of `game_render()`.
-
-**5. Scanline shimmer** ✅ [DONE] — 1px horizontal sweep, 5–10% opacity, every 3–5s. Toggleable via `graphics.scanlines`. Applies only to gameplay viewport, not menu overlays.
-
-**6. Screen-edge vignette** ✅ [DONE] — PHOTIC RUST `#B22222` tint at screen edges, scales with zone depth. CINNABAR pulse on beat peak.
-
-**7. Score / event floats** *(terminal style)* ✅ [DONE] — `Share Tech Mono`, all-caps, scale-up-and-fade over 1.5s. URTH CYAN for Chronicle gain, CINNABAR for damage, ACID GREEN for resource pickup. Format matches item card stat style from `FULIGIN_Guide.pdf` p.2.
-
-**8. Zone transition banner** *(terminal style)* ✅ [DONE] — `>>> ENTERING IRON SHOALS <<<` slides in at top, monospace, GHOST WHITE with full URTH CYAN glow. Bracket-corner framing. Reference: todo.md zone transition spec.
-
-**9. Vector stress-cracking** ✅ [DONE] — High-value asteroids display spreading wireframe fractures before shattering. URTH CYAN cracks, CINNABAR flash at break point.
-
-**10. Warp-drive singularity exit effects** ✅ [DONE] — Three unlockable warp FX: vector expansion (default), black-hole collapse (all screen lines converge to 1px then explode), CRT power-down flash. Progression rewards. *(Default vector-expansion + CRT-bloom-flash variant shipped — fires on every warp jump; black-hole-collapse variant and the unlock-progression system deferred.)*
-
-**11. Engine dust trail** ✅ [DONE] — Phos-green (`#39FF14`) vector particle trail proportional to ship velocity. Ambient cosmic dust sucked in at high speeds.
-
-**12. Glitch tearing on crits** ✅ [DONE] — Crit hit or large rift: vector lines duplicate, shake, tear across horizontal scanlines + white-noise screech.
+- [ ] **Angled Viewport Panels (FF7R Motif):** Update `ui_panel_angled` to use a top-left angled cut (12px diagonal), but draw borders using the Noctis cyan/teal palette (`#00b4d8`).
+- [ ] **Terminal Typography (CoQ Motif):** Use strict monospace-aligned column grids for all HUD elements. All text must be ALL-CAPS. Use bracket prompts `[HP]`, `[FUEL]` and the chevron `>` for active targets.
+- [ ] **Progress Bars (Synthesis):**
+  - Use **Segmented Bars** (FF7R) for primary resources (ATB/Chronicle) with a 2px gap between segments.
+  - Use **Discrete Blocks** (CoQ) for secondary gauges (`▐▐▐▐░░░░`), rendered in Noctis Acid Green or Cyan.
+- [ ] **CRT Atmosphere:** Apply screen-edge vignettes and scanline overlays across the entire HUD.
+- [ ] **Zone Transition Banners:** Slide in `>>> ENTERING [ZONE] <<<` overlays at the top of the screen on warping, using terminal monospaced alignment and bright Noctis colors.
+- [ ] **Proximity Danger Alert:** Pulse a flashing `>>> DANGER <<<` alert at bottom-center when enemies are close (Cinnabar/Red).
 
 ---
 
-## 🟡 Gameplay Mechanics
+## 2. Menu Systems & Settings UI
+**Style Rule:** *Primarily FF7R menu geometry/layout, secondarily Caves of Qud Noctis colors/fonts.*
 
-**13. Zone transition system** — Five zones (HOME STATION → SCRAP FIELDS → IRON SHOALS → VOID REACHES → DEEP DRIFT), danger/density scaling outward. Warp loci as fixed nav beacons. Zone entry triggers banner (item 8).
-
-**14. Proximity danger alert** *(terminal style)* ✅ [DONE] — Pulsing `>>> DANGER <<<` at bottom-center, CINNABAR, monospace. Matches the terminal bracket-flash style from `vibe_presentation.html`.
-
-**15. Remnant debris / hidden hazards** — Invisible spatial hazards only revealed with PALE SIGHT Reliquary. No visual cue until equipped.
-
-**16. Fuel clock / reactor drain** ✅ [DONE] — Passive reactor drain (0.08 fuel/s base + 0.04/s per active relic) depletes fuel even without thrusting. At 0% fuel: thrust blocked (Emergency Drift Mode), drift_penalty_timer accumulates; after 10 s adrift the ship takes a hull breach (lose a life, fuel refills to 20% emergency reserve, HULL BREACH EventFloat + screen shake). Fuel UI already uses danger ramp via ui_fuel_color().
-
-**17. Emergency heat vent** ✅ [DONE] — Weapon overheat on rapid fire. Player-triggered coolant blowback: dense forward vector particles + instant reverse thrust, consumes fuel.
-
-**18. Gravity slingshot boosts** ✅ [DONE] — Close orbit (150–380 u) around the void rift gives a continuous tangential velocity boost scaled by orbital depth and tangential speed. Fires only when the player is genuinely curving around the rift (|tan_v| > 30). Spawns a 3 s-cooldown "GRAVITY ASSIST" EventFloat + cyan particles on first entry.
-
-**19. Asteroid bowling combos** — Heavy projectile launches chain into larger rocks. `STRIKE!` float in ACID GREEN + multiplier.
-
-**20. Cargo bay / inventory weight** *(terminal style — Qud grid)* — Grid-based cargo slots using the exact inventory grid from `FULIGIN_Guide.pdf` p.5: cyan bracket-corner slot cells, item name in cyan, category tag in magenta `[TYPE]`, stats in acid green. Heavy cargo degrades ship physics.
+- [ ] **Comprehensive Settings Tree:** Implement multi-tab settings UI tree (Video, Audio, Gameplay, Controls).
+  - Use FF7R's stacked diagonal-cut panels for the menu containers.
+  - Use CoQ's monospaced font, Noctis terminal green/teal text colors, and `>` cursors for list selection.
+- [ ] **Menu Layout:** High information density. Selected items get an inverted background (Noctis teal background, dark text), while unselected items dim to 60% alpha.
+- [ ] **Dynamic Range & Toggles:** Add support for dynamic range, mute on focus loss, screen shake scaling, and deadzones within the new menu style.
 
 ---
 
-## 🟢 Enemy AI
-
-**21. Ascians** — Rigid geometric patrol trajectories. No randomness. High-zone only.
-
-**22. Lictors** — Elite fast interceptors, player-targeted. Arrival accelerates beat.
-
-**23. Rust-Weaver Drones** — Corrosive spit bypasses shields, degrades hull plating.
-
-**24. Scavenger Probes** — Tractor-beam Void Steel, attempt warp escape.
-
-**25. EMP Sentinels** — EM pulse locks steering and thrust briefly.
-
----
-
-## 🔵 Lore / UI Features
-
-**26. Cugel-9 board computer** *(terminal style)* — HUD text log panel using `ui_panel_terminal()`. Format: `[CUGEL-9]: STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE.` — monospace, dim cyan label, ghost white body text. Plus TTS using sad/melancholic robot voice. Reference: `FULIGIN_Guide.pdf` p.2 lore text style (italic monospace blockquote).
-
-**27. Pet shield drone chatter** *(terminal style)* — Tiny `Share Tech Mono` text floats above orbital drones: `[HELP]`, `"TARGET: BIG ROCK"`, `"SHIELD AT 24%"`. Low-contrast cyan.
-
-**28. The Rusty Flagon Tavern Beacon** *(menu style)* — Rare neutral station. Docking opens an FF7R-style menu overlay (angled panels) for trading contraband, buying coordinates, or playing vector roulette.
-
----
-
-## ⚪ Settings / Infrastructure
-
-**29. Settings menu** *(FF7R structure + Caves of Qud visual style)* — Full-screen overlay with FF7R-style tab-based navigation and interactability: tab bar across top, `>` chevron row cursor, keyboard/controller nav between rows, segmented sliders for numeric values, toggle switches for booleans. Visual rendering uses the terminal/Qud aesthetic throughout: `ui_panel_terminal()` bracket-corner panels, `Share Tech Mono` monospace font, `#88ccff` cyan label text, `#39FF14` acid-green current values, `#FF00FF` magenta `[CATEGORY]` section headers, `#001100` dark track on slider fills. No diagonal panel cuts — rectangular terminal panels only. Reference: `FULIGIN_Settings_Spec.md` for full field list; `FULIGIN_HUD_DESIGN_BRIEF.md` §1B for bar/slider spec. **After the settings menu is complete, audit and retrofit all other menus, overlays, and non-HUD UI elements (title screen, pause menu, upgrade selection, high score screen, reliquary shop) to the same Qud terminal visual style — monospace, bracket corners, acid green values, magenta category tags. The FF7R angled-panel aesthetic is retired in favour of a unified terminal look across the entire game.**
-
-**30. Consolidate Settings struct** — Reconcile `GameSettings` (spec) with current `Settings` in `game.h`. One canonical struct, one `.cfg` file.
-
-**31. Dynamic CRT glass curvature** — Toggleable shader: 1970s CRT curved faceplate + subtle glass corner reflections. Off by default.
-
-**32. Chronicle chord harmonics** ✅ [DONE] — Rapid orb pickup → sequential FM-synth pentatonic notes. Combo chain = arpeggio.
+## 3. Procedural World & Rogue-like Mechanics
+- [ ] **Procedural World Generation & Seeding:**
+  - Integrate `WorldGenParams` in `include/game.h`.
+  - Support custom generation seeds for predictable sector maps.
+  - Procedurally place structures, debris shoals, and warp loci.
+- [ ] **The Identification & Salvage Loop:**
+  - Unidentified Reliquaries drop with encrypted headers (`RELIC ENC-X902`).
+  - Volatile Fuel Isotopes risk overheating vs. restoring double capacity.
+  - Analysis Terminals at safe structures to identify relics safely.
+- [ ] **Reactor Core & Fuel Clock:**
+  - Sub-System Fuel Consumption: Equipped Reliquaries drain the reactor.
+  - Emergency Drift Mode: At 0% fuel, systems shut down, drifting begins, and hull integrity depletes.
+  - Solar Flare Cycles: Periodic radiation forces coolant/shield consumption.
+- [ ] **Cargo Slots & Inventory Weight:**
+  - Grid-Based Cargo Bay: Limited space for salvage, shield caps, and Reliquaries.
+  - Weight & Inertia: Heavy cargo physically reduces ship rotation/thrust responsiveness.
+- [ ] **Plating Durability & Calibration:**
+  - Ablative Plating Wear: Hits permanently degrade maximum armor value.
+  - Calibration Codes: Chips compiled to boost weapon damage (`+1 CAL`) or armor deflection.
+  - Void-Rust Anomalies: Gas clouds that slowly erode hull integrity.
 
 ---
 
-## Suggested Implementation Order
+## 4. Lore, Enemies & Retro-Arcade Aesthetics
+- [ ] **High-Zone Specialized Enemies:**
+  - *Ascians:* Voiceless interceptors patrolling in rigid geometric trajectories.
+  - *Lictors:* Elite, aggressive interceptor saucers pursuing the Autodyne at high speeds.
+  - *Rust-Weaver Drones:* Spit corrosive green acid bypassing shields.
+  - *Scavenger Probes:* Tractor-beam collected Void Steel and warp away.
+  - *EMP Sentinels:* Pulse freezing electromagnetic fields, locking steering/thrust.
+- [ ] **Status Malfunctions:**
+  - *Sensor Static (Blindness):* Solar radiation disables minimap and reticles.
+  - *Tox-Gas Hallucinations:* Space sickness scrambles visual outlines (e.g. rendering asteroids as Cacogens).
+  - *Reverse Drift (Confusion):* Thruster vectors reversed.
+- [ ] **Visual & Audio Features:**
+  - *Phos-Green Engine Dust Trails:* Engine interacts with floating cosmic dust.
+  - *Cugel-9 Board Computer:* Depressed TTS robot voice printing status reports on HUD.
+  - *Star-Shadow Radiation Shielding:* Steer into asteroid shadows to avoid solar flares.
+  - *Vector Stress-Cracking:* Asteroids show wireframe cracks as they take damage.
+  - *Chronicle Chord Harmonics:* Gathering orbs plays sequential procedural FM-synth notes.
+  - *Glitch Tearing Crit-Hits:* Crits cause screen tear and audio screech.
+  - *Emergency Heat Venting:* Spray superheated steam forward as reverse thrust.
+  - *Warp-Drive Singularity Exit:* Custom exit effects (black hole collapse, CRT power-down).
+  - *Asteroid Bowling:* Launch asteroids into others for a `"STRIKE!"` combo.
 
-1 (dcimgui + two panel primitives) → 2 → 3 → 29 → 6 → 5 → 8 → 14 → 13 → everything else.
+---
 
-The two panel primitives from item 1 unlock all other UI work — that is the critical path. Nothing else in the list should be started until `ui_panel_terminal()` and `ui_panel_menu()` are solid.
+## 5. Interactions & Lore Entities
+- [ ] **The Rusty Flagon Tavern Beacon:**
+  - Docking station to trade Contraband, buy coordinates, or play vector roulette.
+- [ ] **Gravitational Slingshot Boosts:**
+  - Orbit black holes or planetoids for zero-fuel speed boosts.
+- [ ] **The Physical Bane-Whip:**
+  - Kinetic vector tail tethered to ship; smashes rocks on swerve.
+- [ ] **Pet Shield Drone Chatter:**
+  - Tiny, low-contrast text dialogues floating over drones (`"SHIELD AT 24% (HELP)"`).
