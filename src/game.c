@@ -2781,6 +2781,13 @@ void game_handle_input(SDL_Event *event)
         game_state == STATE_ATTRACT_GAMEPLAY) {
         if (event->type == SDL_KEYDOWN) {
             SDL_Keycode _asym = event->key.keysym.sym;
+            if (_asym == SDLK_ESCAPE && game_state == STATE_ATTRACT_GAMEPLAY) {
+                game_state = STATE_PAUSED;
+                is_attract_ai = 0;
+                audio_stop(SFX_THRUST);
+                audio_stop(SFX_UFO_LOOP);
+                return;
+            }
             /* Ignore bare modifier keys */
             if (_asym == SDLK_LCTRL  || _asym == SDLK_RCTRL  ||
                 _asym == SDLK_LSHIFT || _asym == SDLK_RSHIFT  ||
@@ -4820,9 +4827,7 @@ void game_update(float dt)
                 idle_timer = 0.0f;
                 if (game_state == STATE_TITLE)
                     game_state = STATE_ATTRACT_INSTRUCTIONS;
-                else if (game_state == STATE_ATTRACT_INSTRUCTIONS)
-                    game_state = STATE_HIGHSCORES;
-                else if (game_state == STATE_HIGHSCORES) {
+                else if (game_state == STATE_ATTRACT_INSTRUCTIONS) {
                     is_attract_ai = 1;
                     start_new_game();
                     game_state = STATE_ATTRACT_GAMEPLAY;
