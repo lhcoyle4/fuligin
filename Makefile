@@ -24,7 +24,7 @@ LDFLAGS = -L"C:/Users/lhcoy/OneDrive/Desktop/sandbox/fuligin/thirdparty/SDL2-2.3
           -lmingw32 -lSDL2main -lSDL2 -lSDL2_mixer
 
 # --- Sources ------------------------------------------------------------------
-SRC = src/main.c src/vector_graphics.c src/game.c src/vector_font.c src/audio.c src/ui.c src/world_builder.c src/ai.c src/ui_hud.c src/state.c src/game_data.c src/drone_chatter.c src/enemy_rustweaver.c
+SRC = src/main.c src/vector_graphics.c src/game.c src/vector_font.c src/audio.c src/ui.c src/world_builder.c src/ai.c src/ui_hud.c src/state.c src/game_data.c src/drone_chatter.c src/enemy_rustweaver.c src/enemy_ascian.c
 OBJ = $(SRC:.c=.o)
 
 # --- Native target ------------------------------------------------------------

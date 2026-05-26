@@ -21,6 +21,7 @@
 #include "world_builder.h"
 #include "drone_chatter.h"
 #include "enemy_rustweaver.h"
+#include "enemy_ascian.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -2175,6 +2176,7 @@ void game_init()
     vf_init();
     drone_chatter_init();   /* Item 27: pet shield-drone chatter pool */
     rustweaver_init();      /* Item 23: rust-weaver corrosive-spit drone pool */
+    ascian_init();          /* Item 21: ascian voiceless polygon-patrol interceptors */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -4591,6 +4593,57 @@ static void update_collisions(float dt)
         }
     }
 
+    /* ── 5c. Ascian hit tests (Item 21) ────────────────────────────── */
+    /* (a) Player bolts vs Ascians — destroys the interceptor, awards
+     *     elite score + XP.  Ascians are rare so the reward is higher
+     *     than rust-weavers.                                           */
+    for (int b = 0; b < MAX_BULLETS; b++) {
+        if (!bullets[b].active) continue;
+        int asc_slot = ascian_hit_test(bullets[b].pos.x, bullets[b].pos.y);
+        if (asc_slot >= 0) {
+            bullets[b].active = 0;
+            spawn_particles(bullets[b].pos, 24, HUD_MAGENTA);
+            audio_play(SFX_EXPLOSION_MD);
+            spawn_orb(bullets[b].pos, 10);
+            score += 150;
+            spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
+                              "ASCIAN DOWN", HUD_MAGENTA);
+        }
+    }
+
+    /* (b) Ascian bolt vs player hull — standard projectile hit; the
+     *     player's shields/Phase Shift can soak it (no special bypass).
+     *     Invuln_timer still applies so post-spawn / post-Phase-Shift
+     *     grace is preserved.                                          */
+    if (player.active && player.invuln_timer <= 0.0f) {
+        if (ascian_check_player_hit(player.pos.x, player.pos.y,
+                                    player.radius + 2.0f)) {
+            if (check_void_stone()) {
+                /* Void Stone armour soaks one hit — near-miss flash.   */
+            } else {
+                player.active = 0;
+                audio_play(SFX_EXPLOSION_LG);
+                audio_stop(SFX_THRUST);
+                spawn_particles(player.pos, 30, HUD_MAGENTA);
+                spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                                  "INTERCEPTED", HUD_MAGENTA);
+                cugel9_say("ASCIAN BOLT BREACHED THE HULL. PERHAPS YOU SHOULD HAVE DODGED.");
+                lives--;
+                if (lives <= 0) {
+                    game_state = STATE_GAMEOVER;
+                    audio_stop(SFX_UFO_LOOP);
+                } else {
+                    player.invuln_timer = 2.0f;
+                    /* Respawn near origin so the next life isn't stuck
+                     * inside the same Ascian's volley wedge.           */
+                    player.pos.x = (float)(SCREEN_WIDTH / 2);
+                    player.pos.y = (float)(SCREEN_HEIGHT / 2);
+                    player.vel.x = player.vel.y = 0.0f;
+                }
+            }
+        }
+    }
+
     /* ── 5b. Rust-Weaver hit tests (Item 23) ───────────────────────── */
     /* (a) Player bolts vs drones — destroys the drone, awards score + XP.
      *     rustweaver_hit_test deactivates the drone if it's within ~16u of
@@ -4786,6 +4839,45 @@ static void update_spawning(float dt)
             /* Outside Zone 2+ the timer is held at a fresh value so the
              * first spawn after re-entry isn't immediate. */
             rustweaver_spawn_timer = 25.0f;
+        }
+    }
+
+    /* ── Item 21: Ascian spawn pacing ─────────────────────────────── */
+    /* Elite, rare, voiceless interceptors patrolling fixed regular
+     * polygons.  Zone 3+ only — they belong to the deeper zones where
+     * the danger ramp is highest.  Spawn timer is longer than the
+     * rust-weaver pacing because their on-screen behaviour is heavier
+     * (each one effectively claims a 200u patrol ring).
+     *
+     * Polygon parameters are deterministic per slot index so the patrol
+     * geometry stays "rigid" frame-to-frame as required by the spec.
+     * Center is placed 800-1100u from the player at a random angle so
+     * the Ascian's first appearance is off-screen and drifts into
+     * combat range over its own orbit. */
+    {
+        static float ascian_spawn_timer = 40.0f;
+        static int   ascian_spawn_count = 0;
+        if (player.active && player_zone >= 3) {
+            ascian_spawn_timer -= dt;
+            if (ascian_spawn_timer <= 0.0f) {
+                float ang  = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+                float dist = 800.0f + ((float)rand() / RAND_MAX) * 300.0f;
+                float sx   = player.pos.x + cosf(ang) * dist;
+                float sy   = player.pos.y + sinf(ang) * dist;
+                /* Cycle through triangle / square / pentagon for visual
+                 * variety while remaining deterministic per-spawn.       */
+                int sides  = 3 + (ascian_spawn_count % 3);
+                float pr   = 140.0f + (float)(ascian_spawn_count % 2) * 40.0f;
+                if (ascian_spawn(sx, sy, sides, pr) >= 0) {
+                    ascian_spawn_count++;
+                    /* Re-arm 55-85 s — sparse, elite cadence. */
+                    ascian_spawn_timer = 55.0f + (float)(rand() % 31);
+                } else {
+                    ascian_spawn_timer = 8.0f;  /* pool full, short retry */
+                }
+            }
+        } else {
+            ascian_spawn_timer = 40.0f;
         }
     }
 
@@ -5089,6 +5181,7 @@ void game_update(float dt)
     update_particles_orbs_npcs(dt);
     drone_chatter_update(dt);   /* Item 27: tick fade timers on drone chatter floats */
     rustweaver_update(dt, player.pos.x, player.pos.y);  /* Item 23: rust-weaver AI + spit projectiles */
+    ascian_update(dt, player.pos.x, player.pos.y);      /* Item 21: ascian polygon patrol + volleys */
     update_collisions(dt);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
@@ -5836,6 +5929,13 @@ static void render_entities(void)
      * friendly drones' diamond glyphs.  Module uses raw SDL_RenderDrawLineF
      * (bypasses vg_set_camera) so it needs the world→screen offset directly. */
     rustweaver_render(g_renderer, camera_pos.x, camera_pos.y);
+
+    /* ── Item 21: Ascian polygon-patrol interceptors + volley bolts ─ */
+    /* Same world→screen offset convention as rustweaver_render: this
+     * module also uses raw SDL_RenderDrawLineF calls.  Magenta triangles
+     * + magenta bolt streaks read as a clean geometric contrast to the
+     * rust-weaver's organic green stars. */
+    ascian_render(g_renderer, camera_pos.x, camera_pos.y);
 }
 
 /* ────────────────────────────────────────────────────────────────────── */

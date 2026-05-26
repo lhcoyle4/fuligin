@@ -69,7 +69,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 ## 🟢 Enemy AI
 
-**21. Ascians** — Rigid geometric patrol trajectories. No randomness. High-zone only.
+**21. Ascians** ✅ [DONE] — Voiceless interceptor saucers patrolling regular-polygon perimeters at constant angular speed in Zone 3+. Module `src/enemy_ascian.[ch]` wired into `game.c`: `ascian_init()` in `game_init()`, `ascian_update()` after `rustweaver_update()` in the simulation tick, `ascian_render(g_renderer, camera_pos.x, camera_pos.y)` after the rust-weaver render. Spawn pacing: Zone 3+ only, 55-85s timer, 800-1100u spawn ring, cycles triangle/square/pentagon patrol shapes per spawn. Three-bolt magenta wedge volley when player crosses 600u detect radius (4.2s cooldown). Collision section 5c runs `ascian_hit_test` against player bolts (+150 score, +1 XP orb, ASCIAN DOWN float) and `ascian_check_player_hit` against the player hull (standard projectile damage — Void Stone armour soaks one hit; "INTERCEPTED" float + sad Cugel-9 quip). Voiceless per design contract — module emits no SFX of its own. Clean build, exe produced (319KB), no new warnings.
 
 **22. Lictors** — Elite fast interceptors, player-targeted. Arrival accelerates beat.
 

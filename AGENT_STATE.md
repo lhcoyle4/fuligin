@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Item 21 — Ascians (rigid geometric patrol interceptors); new module + integration
-- **Locked Files**: src/game.c, Makefile, src/enemy_ascian.c (new), include/enemy_ascian.h (new), todo.md, FULIGIN_ACTION_LIST.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
@@ -55,3 +55,4 @@
 | Claude | CRT glass curvature (item 31) [IN PROGRESS]: render_crt_glass() static fn in game.c (14 edge strips + 40 corner glare diagonals, SDL2 draw calls); vg_apply_crt_glass() removed; settings_crt_curve toggle live | agent/claude | 2026-05-25 |
 | Claude | Pet shield-drone chatter (Item 27) integrated: drone_chatter.c added to Makefile SRC; NpcEntity gained chatter_timer field; NPC update loop emits TARGET_UFO / TARGET_LARGE / HELP / COORDINATING events based on proximity & game state; drone_chatter_update() ticks each frame; drone_chatter_render() called after NPC shapes; full compile-clean | agent/claude | 2026-05-26 |
 | Claude | Rust-Weaver Drones (Item 23) integrated + Makefile SRC repair: enemy_rustweaver.[ch] wired into game.c (init, update, render, Zone 2+ spawn pacing 35-55s with jitter, player-bolt-vs-drone hit test, corrosive-spit-vs-player hull damage that bypasses Ether Shroud and Phase Shift). rustweaver_render signature gained camera_x/y params so the raw SDL_RenderDrawLineF calls render in screen-space. Makefile SRC line restored to include the previously-dropped src/state.c and src/game_data.c (link was broken — ~60 undefined references); also added src/enemy_rustweaver.c. Clean build, exe produced (314KB), no new warnings. | agent/claude | 2026-05-26 |
+| Claude | Ascians (Item 21) integrated: new module enemy_ascian.[ch] — voiceless polygon-patrol interceptors. Each Ascian walks the perimeter of a regular N-gon (3-6 sides) at constant angular speed, no pursuit, no randomness. Detect radius 600u; on cooldown elapses, fires a tight three-bolt magenta wedge (0.18 rad spread) at the player. Wired into game.c: ascian_init in game_init, ascian_update after rustweaver_update in tick, ascian_render after rustweaver_render. Zone 3+ spawn pacing (55-85s timer, 800-1100u ring); cycles triangle/square/pentagon patrol shapes deterministically. Collision section 5c handles player-bolt vs Ascian (+150 score, ASCIAN DOWN float) and Ascian-bolt vs player (standard hit, Void Stone soak, INTERCEPTED float + Cugel-9 quip). Makefile SRC updated. Full project rebuilds clean, 319KB exe. | agent/claude | 2026-05-26 |
