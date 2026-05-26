@@ -24,6 +24,7 @@
 #include "enemy_ascian.h"
 #include "enemy_lictor.h"
 #include "enemy_emp_sentinel.h"
+#include "enemy_scavenger.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -2207,6 +2208,7 @@ void game_init()
     ascian_init();          /* Item 21: ascian voiceless polygon-patrol interceptors */
     lictor_init();          /* Item 22: lictor elite pursuit interceptors          */
     emp_sentinel_init();    /* Item 25: emp sentinels — status-disruption units    */
+    scavenger_init();       /* Item 24: scavenger probes — void-steel theft units  */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -4811,6 +4813,49 @@ static void update_collisions(float dt)
         }
     }
 
+    /* ── 5f. Scavenger Probe hit tests (Item 24) ───────────────────── */
+    /* Player bolts vs probes — destroys the probe and DROPS its stolen
+     * cargo back at the probe's last position as recoverable Chronicle
+     * orbs (the same orb type used for XP since we have no dedicated
+     * Void-Steel-orb entity; the player still has to fly back to pick
+     * them up, which is the loss-pressure beat).  Scavengers do not
+     * shoot, so there is no projectile-vs-player branch in this block —
+     * the threat is entirely about resource theft. */
+    for (int b = 0; b < MAX_BULLETS; b++) {
+        if (!bullets[b].active) continue;
+        {
+            int   stolen = 0;
+            float drop_x = 0.0f, drop_y = 0.0f;
+            int   sc_slot = scavenger_hit_test(bullets[b].pos.x,
+                                               bullets[b].pos.y,
+                                               &stolen, &drop_x, &drop_y);
+            if (sc_slot >= 0) {
+                bullets[b].active = 0;
+                spawn_particles(bullets[b].pos, 22, HUD_AMBER);
+                audio_play(SFX_EXPLOSION_MD);
+                /* Always give a small XP orb for the kill itself. */
+                spawn_orb(bullets[b].pos, 4);
+                score += 120;
+                spawn_event_float(bullets[b].pos.x,
+                                  bullets[b].pos.y - 18.0f,
+                                  "SCAVENGER DOWN", HUD_AMBER);
+                /* Refund the stolen Void Steel.  We mutate the same
+                 * static counter the shop/spawn code uses; one orb per
+                 * unit so the player can see what came back. */
+                if (stolen > 0) {
+                    res_void_steel += stolen;
+                    {
+                        Vec2 d = { drop_x, drop_y };
+                        spawn_particles(d, 8 + stolen * 4, HUD_TEXT_CYAN);
+                    }
+                    spawn_event_float(drop_x, drop_y - 12.0f,
+                                      "+VOID STEEL", HUD_TEXT_CYAN);
+                    cugel9_say("CARGO RECOVERED. THE UNIVERSE STILL HATES YOU, BUT LESS.");
+                }
+            }
+        }
+    }
+
     /* ── 5b. Rust-Weaver hit tests (Item 23) ───────────────────────── */
     /* (a) Player bolts vs drones — destroys the drone, awards score + XP.
      *     rustweaver_hit_test deactivates the drone if it's within ~16u of
@@ -5102,6 +5147,41 @@ static void update_spawning(float dt)
             }
         } else {
             emp_spawn_timer = 45.0f;
+        }
+    }
+
+    /* ── Item 24: Scavenger Probe spawn pacing ──────────────────────── */
+    /* Probes only show up when the player has Void Steel to steal.
+     * Otherwise the threat is null and the spawn would be pointless
+     * theatre.  Zone 1+ (Inner Belt onward) — keep Home Space probe-
+     * free so the early-game pickup loop is uninterrupted.  Cadence
+     * 60-90 s with a 900-1200 u spawn ring; pool cap 4 lives entirely
+     * inside the module so a "pool full" return short-retries here.    */
+    {
+        static float scav_spawn_timer = 75.0f;
+        if (player.active && player_zone >= 1 && res_void_steel > 0) {
+            scav_spawn_timer -= dt;
+            if (scav_spawn_timer <= 0.0f) {
+                float ang  = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+                float dist = 900.0f + ((float)rand() / RAND_MAX) * 300.0f;
+                float sx   = player.pos.x + cosf(ang) * dist;
+                float sy   = player.pos.y + sinf(ang) * dist;
+                if (scavenger_spawn(sx, sy,
+                                    player.pos.x, player.pos.y) >= 0) {
+                    /* Foreshadow Cugel-9 quip on first arrival per
+                     * cadence so the player learns to identify the
+                     * sound + dialog as "guard your inventory now". */
+                    cugel9_say("UNAUTHORIZED SALVAGE BIDDER APPROACHING. RECOMMEND PRECISION DISCOURAGEMENT.");
+                    scav_spawn_timer = 60.0f + (float)(rand() % 31);
+                } else {
+                    scav_spawn_timer = 10.0f;  /* pool full, short retry */
+                }
+            }
+        } else {
+            /* No steel to steal or wrong zone — drift the timer back to a
+             * "freshly armed" value so the next legitimate trigger has
+             * the full window, not a cached countdown from earlier. */
+            scav_spawn_timer = 75.0f;
         }
     }
 
@@ -5510,6 +5590,22 @@ void game_update(float dt)
     ascian_update(dt, player.pos.x, player.pos.y);      /* Item 21: ascian polygon patrol + volleys */
     lictor_update(dt, player.pos.x, player.pos.y);      /* Item 22: lictor pursuit + aimed bolts    */
     emp_sentinel_update(dt, player.pos.x, player.pos.y);/* Item 25: emp sentinel CHARGE/PULSE cycle */
+    {
+        /* Item 24: scavenger probe SEEK→TRACTOR→ESCAPE→WARP cycle.  The
+         * module returns the number of Void Steel units siphoned from
+         * the player THIS FRAME — game.c is the source of truth for the
+         * resource counter so we apply the deduction here.  spawn a
+         * float per siphon tick so the player feels the bleed. */
+        int siphoned = scavenger_update(dt, player.pos.x, player.pos.y,
+                                        res_void_steel);
+        if (siphoned > 0) {
+            if (siphoned > res_void_steel) siphoned = res_void_steel;
+            res_void_steel -= siphoned;
+            audio_play(SFX_EXPLOSION_SM);
+            spawn_event_float(player.pos.x, player.pos.y - 28.0f,
+                              "-VOID STEEL", HUD_CINNABAR);
+        }
+    }
     update_collisions(dt);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
@@ -6335,6 +6431,14 @@ static void render_entities(void)
      * ring during the PULSE phase.  Drawn last so the ring overlays
      * other enemies — it's the gameplay-critical telegraph. */
     emp_sentinel_render(g_renderer, camera_pos.x, camera_pos.y);
+
+    /* ── Item 24: Scavenger Probes — amber bow-tie + dashed cyan beam ─ */
+    /* Probes draw bow-tie silhouettes, dashed cyan tractor beams while
+     * siphoning, and a shrinking amber ring during the WARP-out phase.
+     * Drawn after the EMP ring so the beam isn't visually swallowed by
+     * a coincident pulse — the scavenger beam IS the gameplay tell.   */
+    scavenger_render(g_renderer, camera_pos.x, camera_pos.y,
+                     player.pos.x, player.pos.y);
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
