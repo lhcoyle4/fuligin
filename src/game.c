@@ -49,7 +49,7 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define MAX_SCORE_FLOATS  24
 #define MAX_EVENT_FLOATS  16   /* labeled text pop-ups: CRIT!, STRIKE!, HIT, etc. */
 #define MAX_WARP_LOCS      8
-#define SHOP_ITEMS_PER_PAGE 14
+#define SHOP_ITEMS_PER_PAGE 16
 #define PHOS_TRAIL_LEN    14  /* phosphor trail length (samples) */
 
 /* =========== PHYSICS CONSTANTS =========== */
@@ -784,6 +784,7 @@ static int res_medicinals     = 0;
 static int res_biomatter      = 0;
 static int res_shield_caps    = 0;
 static int res_alien_flora    = 0;
+static int chrome             = 0;
 
 /* --- Fuel system --- */
 static float fuel_current        = 100.0f;
@@ -2723,9 +2724,9 @@ static void handle_input_shop(SDL_Event *event)
     if (sym == SDLK_ESCAPE) {
         game_state = STATE_PLAYING;
     } else if (sym == SDLK_UP   || sym == SDLK_w) {
-        shop_sel = (shop_sel + 13) % 14;
+        shop_sel = (shop_sel + 15) % 16;
     } else if (sym == SDLK_DOWN || sym == SDLK_s) {
-        shop_sel = (shop_sel + 1) % 14;
+        shop_sel = (shop_sel + 1) % 16;
     } else if (sym == SDLK_RETURN || sym == SDLK_SPACE) {
         switch (shop_sel) {
             case  0: if (res_void_steel >= 3)
@@ -2757,6 +2758,10 @@ static void handle_input_shop(SDL_Event *event)
                          { res_biomatter -= 5; res_void_steel += 5; } break;
             case 13: if (res_alien_flora >= 3)
                          { res_alien_flora -= 3; player_upgrades.magnet_radius += 100.0f; } break;
+            case 14: if (chrome >= 1)
+                         { chrome -= 1; apply_upgrade(UPGRADE_TRIPLE_SHOT); } break;
+            case 15: if (chrome >= 1)
+                         { chrome -= 1; apply_upgrade(UPGRADE_SHIELD); } break;
             default: break;
         }
     }
@@ -6272,9 +6277,10 @@ static void render_overlays(void)
             "CANNON UPGRADE",     "HULL PLATING",        "EMERGENCY LIFE",
             "ROCKET PACK (+5)",   "FIGHTER DRONE",       "REPAIR DRONE",
             "WARP RANGE +1000u",  "FUEL TANK UPGRADE",  "AMMO RESUPPLY",
-            "VOID STEEL SMELTER", "AUTODYNE SCANNER"
+            "VOID STEEL SMELTER", "AUTODYNE SCANNER",    "CHROME: TRISKELION",
+            "CHROME: ETHER SHROUD"
         };
-        #define SHOP_TOTAL 14
+        #define SHOP_TOTAL 16
         for (int si = 0; si < SHOP_TOTAL && si < SHOP_ITEMS_PER_PAGE; si++) {
             float iy = 115.0f + si * 42.0f;
             SDL_Color ic = (si == shop_sel) ? HUD_TEXT_GOLD : HUD_TEXT_PRIMARY;
@@ -6288,9 +6294,9 @@ static void render_overlays(void)
         }
         #undef SHOP_TOTAL
         char inv[128];
-        sprintf(inv, "INV: VS:%d AF:%d HX:%d IS:%d AM:%d RK:%d",
+        sprintf(inv, "INV: VS:%d AF:%d HX:%d IS:%d AM:%d RK:%d CHR:%d",
                 res_void_steel, res_autodyne_frags, res_hex_modules,
-                res_isotopes, res_ammo, res_rockets);
+                res_isotopes, res_ammo, res_rockets, chrome);
         vf_draw_string_centered(inv, SCREEN_WIDTH / 2.0f,
                                 SCREEN_HEIGHT - 70, 10, HUD_TEXT_DIM);
     }
