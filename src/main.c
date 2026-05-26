@@ -12,6 +12,8 @@
 #include "audio.h"
 #include <stdlib.h>
 #include <time.h>
+#include <stdio.h>
+#include <string.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -67,16 +69,25 @@ void main_loop(void) {
  *        the player quits.
  */
 int main(int argc, char *argv[]) {
-    int log_priority = SDL_LOG_PRIORITY_WARN;
+    int debug_mode = 0;
+    int info_mode = 0;
+
     for (int i = 1; i < argc; i++) {
-        if (strcmp(argv[i], "--info") == 0) {
-            log_priority = SDL_LOG_PRIORITY_INFO;
-        } else if (strcmp(argv[i], "--debug") == 0) {
-            log_priority = SDL_LOG_PRIORITY_DEBUG;
+        if (strcmp(argv[i], "--debug") == 0) {
+            debug_mode = 1;
+        } else if (strcmp(argv[i], "--info") == 0) {
+            info_mode = 1;
         }
     }
-    SDL_LogSetAllPriority(log_priority);
 
+    if (!debug_mode && !info_mode) {
+        SDL_LogSetAllPriority(SDL_LOG_PRIORITY_CRITICAL);
+    } else {
+        SDL_LogSetAllPriority(debug_mode ? SDL_LOG_PRIORITY_DEBUG : SDL_LOG_PRIORITY_INFO);
+    }
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     srand((unsigned int)time(NULL));
 
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_GAMECONTROLLER) < 0) {
@@ -106,6 +117,24 @@ int main(int argc, char *argv[]) {
     );
 
     if (!g_renderer) {
+        SDL_Log("Hardware renderer with VSYNC failed, trying without VSYNC...");
+        g_renderer = SDL_CreateRenderer(
+            g_window,
+            -1,
+            SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE
+        );
+    }
+    
+    if (!g_renderer) {
+        SDL_Log("Hardware renderer failed, falling back to software renderer...");
+        g_renderer = SDL_CreateRenderer(
+            g_window,
+            -1,
+            SDL_RENDERER_SOFTWARE | SDL_RENDERER_TARGETTEXTURE
+        );
+    }
+
+    if (!g_renderer) {
         SDL_Log("Renderer could not be created! SDL_Error: %s", SDL_GetError());
         SDL_DestroyWindow(g_window);
         SDL_Quit();
@@ -128,8 +157,14 @@ int main(int argc, char *argv[]) {
 #ifdef __EMSCRIPTEN__
     emscripten_set_main_loop(main_loop, 0, 1);
 #else
+    const Uint32 target_frame_time = 1000 / 60; /* 60 FPS cap */
     while (running) {
+        Uint32 frame_start = SDL_GetTicks();
         main_loop();
+        Uint32 frame_time = SDL_GetTicks() - frame_start;
+        if (frame_time < target_frame_time) {
+            SDL_Delay(target_frame_time - frame_time);
+        }
     }
 #endif
 
