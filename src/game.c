@@ -67,7 +67,12 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define HYPERSPACE_DEATH_CHANCE   0.015f  /* probability of dying on hyperspace jump */
 #define WARP_FUEL_COST           20.0f    /* fuel consumed per warp-drive jump */
 #define FUEL_BURN_RATE            3.5f    /* fuel drained per second while thrusting */
-#define FUEL_REGEN_RADIUS       600.0f    /* distance from home at which fuel regenerates */
+/* World-scale: the universe was scaled up 10x.  All "distance from origin"
+ * and absolute world-space constants below were multiplied by 10 so the
+ * navigable map feels 10x larger.  Density-around-player constants (spawn
+ * rings, follow distances) intentionally stayed the same so encounter
+ * frequency near the player is unchanged — only travel distance grew. */
+#define FUEL_REGEN_RADIUS       6000.0f   /* distance from home at which fuel regenerates (was 600, now 10x) */
 #define FUEL_PASSIVE_BASE_RATE    0.08f   /* idle reactor drain even without thrusting */
 #define FUEL_RELIC_RATE           0.04f   /* extra drain per active relic/weapon system */
 #define FUEL_DRIFT_PENALTY_TIME  10.0f   /* seconds adrift before emergency hull breach */
@@ -84,9 +89,9 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define RIFT_SPAWN_RING_MAX      1100.0f
 
 /* Named zone radii (world units from origin) */
-#define ZONE_HOME_RADIUS         1000.0f  /* home zone — safe area near station */
-#define ZONE_INNER_RADIUS        3500.0f  /* inner belt — mid-difficulty band */
-#define ZONE_VOID_RADIUS         8000.0f  /* void zone — outer ring, maximum threat */
+#define ZONE_HOME_RADIUS        10000.0f  /* home zone — safe area near station (10x scale) */
+#define ZONE_INNER_RADIUS       35000.0f  /* inner belt — mid-difficulty band (10x scale) */
+#define ZONE_VOID_RADIUS        80000.0f  /* void zone — outer ring, maximum threat (10x scale) */
 
 /* =========== ENUMERATIONS =========== */
 
@@ -2020,11 +2025,12 @@ static void start_new_game()
 
     /* Populate warp loci — home base + 4 zone beacons */
     warp_loc_count = 0;
-    warp_locs[warp_loc_count++] = (WarpLoc){{    0.0f,    0.0f }, "HOME STATION"};
-    warp_locs[warp_loc_count++] = (WarpLoc){{ 2000.0f,  500.0f }, "SCRAP FIELDS"};
-    warp_locs[warp_loc_count++] = (WarpLoc){{-1800.0f, 1200.0f }, "VOID REACHES"};
-    warp_locs[warp_loc_count++] = (WarpLoc){{ 3500.0f,-2000.0f }, "IRON SHOALS" };
-    warp_locs[warp_loc_count++] = (WarpLoc){{-3000.0f,-1500.0f }, "DEEP DRIFT"  };
+    /* Warp loci — 10x scale to match the expanded universe (was max 3500u). */
+    warp_locs[warp_loc_count++] = (WarpLoc){{      0.0f,      0.0f }, "HOME STATION"};
+    warp_locs[warp_loc_count++] = (WarpLoc){{  20000.0f,   5000.0f }, "SCRAP FIELDS"};
+    warp_locs[warp_loc_count++] = (WarpLoc){{ -18000.0f,  12000.0f }, "VOID REACHES"};
+    warp_locs[warp_loc_count++] = (WarpLoc){{  35000.0f, -20000.0f }, "IRON SHOALS" };
+    warp_locs[warp_loc_count++] = (WarpLoc){{ -30000.0f, -15000.0f }, "DEEP DRIFT"  };
     warp_menu_sel = 0;
 
     reset_player();

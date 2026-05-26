@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: World-scale 10x — scale warp_locs[] world coordinates + zone-threshold distances by 10
-- **Locked Files**: src/game.c, AGENT_STATE.md, FULIGIN_ACTION_LIST.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -50,4 +50,5 @@
 | Claude | Powerup window bug fix: replaced static upgrade_options/selected_option duplicates in game.c with narrow externs sharing state.c globals; cursor now advances + Enter selects correctly | a199055 | 2026-05-25 |
 | Claude | New unintegrated modules ready for follow-up: src/enemy_rustweaver.[ch] (Item 23) + src/drone_chatter.[ch] (Item 27) | a199055 | 2026-05-25 |
 | Claude | FULIGIN_REFACTOR_GUIDE.md: project-local refactoring playbook synthesizing Wikipedia + Augment + FULIGIN-specific traps | 99bf0bb | 2026-05-25 |
+| Claude | World-scale 10x: FUEL_REGEN_RADIUS, ZONE_HOME/INNER/VOID_RADIUS, and warp_locs[] coordinates multiplied by 10 — navigable universe is now 10x larger, encounter density near player unchanged | agent/claude | 2026-05-25 |
 | Claude | CRT glass curvature (item 31) [IN PROGRESS]: render_crt_glass() static fn in game.c (14 edge strips + 40 corner glare diagonals, SDL2 draw calls); vg_apply_crt_glass() removed; settings_crt_curve toggle live | agent/claude | 2026-05-25 |
