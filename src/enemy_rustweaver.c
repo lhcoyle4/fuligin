@@ -169,17 +169,28 @@ static void draw_spit(SDL_Renderer *r, float x, float y, float vx, float vy) {
     SDL_RenderDrawPointF(r, tx, ty);
 }
 
-void rustweaver_render(SDL_Renderer *r) {
+void rustweaver_render(SDL_Renderer *r, float camera_x, float camera_y) {
     int i;
     if (!r) return;
     SDL_SetRenderDrawBlendMode(r, SDL_BLENDMODE_BLEND);
+    /* Translate world → screen coords by subtracting the camera's top-left.
+     * Generous off-screen cull (~SCREEN_WIDTH/HEIGHT plus a 64 px margin)
+     * skips the spoke/spit rasterizer for entities the player can't see. */
     for (i = 0; i < RUSTWEAVER_MAX; ++i) {
+        float sx, sy;
         if (!drones[i].active) continue;
-        draw_drone(r, drones[i].x, drones[i].y);
+        sx = drones[i].x - camera_x;
+        sy = drones[i].y - camera_y;
+        if (sx < -64.0f || sx > 1984.0f || sy < -64.0f || sy > 1144.0f) continue;
+        draw_drone(r, sx, sy);
     }
     for (i = 0; i < RUSTWEAVER_SPIT_MAX; ++i) {
+        float sx, sy;
         if (!spits[i].active) continue;
-        draw_spit(r, spits[i].x, spits[i].y, spits[i].vx, spits[i].vy);
+        sx = spits[i].x - camera_x;
+        sy = spits[i].y - camera_y;
+        if (sx < -32.0f || sx > 1952.0f || sy < -32.0f || sy > 1112.0f) continue;
+        draw_spit(r, sx, sy, spits[i].vx, spits[i].vy);
     }
 }
 

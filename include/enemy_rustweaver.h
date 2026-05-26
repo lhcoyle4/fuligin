@@ -16,8 +16,12 @@ int  rustweaver_spawn(float cx, float cy);
  * Pass player position so the drones can drift toward it.               */
 void rustweaver_update(float dt, float player_x, float player_y);
 
-/* Render drones + active spit projectiles. */
-void rustweaver_render(SDL_Renderer *r);
+/* Render drones + active spit projectiles.
+ * (camera_x, camera_y) is the camera's world-space top-left (matches the
+ * convention used by drone_chatter_render).  The raw SDL_RenderDrawLineF
+ * calls inside this module bypass vg_set_camera, so the offset must be
+ * supplied here. */
+void rustweaver_render(SDL_Renderer *r, float camera_x, float camera_y);
 
 /* Test a player position against all active corrosive spits.  Returns 1 if
  * the player is hit (and the spit is consumed).  Caller is responsible for

@@ -73,7 +73,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **22. Lictors** — Elite fast interceptors, player-targeted. Arrival accelerates beat.
 
-**23. Rust-Weaver Drones** — Corrosive spit bypasses shields, degrades hull plating.
+**23. Rust-Weaver Drones** ✅ [DONE] — Corrosive spit bypasses shields, degrades hull plating. Module `src/enemy_rustweaver.[ch]` wired into `game.c`: `rustweaver_init()` in `game_init()`, `rustweaver_update()` after `drone_chatter_update()` in the simulation tick, `rustweaver_render(g_renderer, camera_pos.x, camera_pos.y)` after NPC shapes in `render_entities()`. Spawn pacing: Zone 2+ only, 35-55s timer with jitter, 700-1000u spawn ring. Collision section 5b runs `rustweaver_hit_test` against player bolts (+75 score, +1 XP orb, RUSTWEAVER DOWN float) and `rustweaver_check_player_hit` against the player hull (corrosion bypasses Ether Shroud and Phase Shift — direct hull-breach unless Void Stone armour soaks; "CORROSION" float + sad Cugel-9 quip). Makefile SRC line also restored to include the previously-dropped `src/state.c` and `src/game_data.c` so the build links again.
 
 **24. Scavenger Probes** — Tractor-beam Void Steel, attempt warp escape.
 

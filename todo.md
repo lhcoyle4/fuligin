@@ -61,7 +61,7 @@ Rogue uses food to force momentum. In FULIGIN, the ship itself is the clock:
 
 ### 5. Tactical Enemy AI Archetypes (Monsters)
 Adapt Rogue's classic monster behaviors to space entities:
-- [ ] **Rust-Weaver Drones:** Spits corrosive green spit that bypasses shields to degrade hull plating.
+- [x] **Rust-Weaver Drones:** Spits corrosive green spit that bypasses shields to degrade hull plating. *(Integrated into `src/game.c` — module spawns in Zone 2+; corrosive spit bypasses Ether Shroud and Phase Shift; see action list item 23 for full wiring details.)*
 - [ ] **Scavenger Probes (Leprechauns):** Do not attack directly; instead, they tractor-beam your collected Void Steel and attempt to warp away.
 - [ ] **EMP Sentinels (Floating Eyes):** Pulse a freezing electromagnetic field, locking ship steering and thrust for a brief duration.
 

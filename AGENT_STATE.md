@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Wire Item 23 (Rust-Weaver Drones) into game loop — module exists at src/enemy_rustweaver.[ch] but is not in Makefile SRC and never called from game.c
-- **Locked Files**: Makefile, src/game.c, src/enemy_rustweaver.c, include/enemy_rustweaver.h, todo.md, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
@@ -54,3 +54,4 @@
 | Claude | Splash centering + minimap visibility + state.h syntax fix: boot text now centered on screen via vf_draw_string_centered, minimap uses ui_panel_terminal + HUD_BORDER_ACTIVE for visibility, state.h garbage lines 222-223 deleted (was blocking whole project build) | agent/claude | 2026-05-25 |
 | Claude | CRT glass curvature (item 31) [IN PROGRESS]: render_crt_glass() static fn in game.c (14 edge strips + 40 corner glare diagonals, SDL2 draw calls); vg_apply_crt_glass() removed; settings_crt_curve toggle live | agent/claude | 2026-05-25 |
 | Claude | Pet shield-drone chatter (Item 27) integrated: drone_chatter.c added to Makefile SRC; NpcEntity gained chatter_timer field; NPC update loop emits TARGET_UFO / TARGET_LARGE / HELP / COORDINATING events based on proximity & game state; drone_chatter_update() ticks each frame; drone_chatter_render() called after NPC shapes; full compile-clean | agent/claude | 2026-05-26 |
+| Claude | Rust-Weaver Drones (Item 23) integrated + Makefile SRC repair: enemy_rustweaver.[ch] wired into game.c (init, update, render, Zone 2+ spawn pacing 35-55s with jitter, player-bolt-vs-drone hit test, corrosive-spit-vs-player hull damage that bypasses Ether Shroud and Phase Shift). rustweaver_render signature gained camera_x/y params so the raw SDL_RenderDrawLineF calls render in screen-space. Makefile SRC line restored to include the previously-dropped src/state.c and src/game_data.c (link was broken — ~60 undefined references); also added src/enemy_rustweaver.c. Clean build, exe produced (314KB), no new warnings. | agent/claude | 2026-05-26 |

@@ -20,6 +20,7 @@
 #include "ui.h"
 #include "world_builder.h"
 #include "drone_chatter.h"
+#include "enemy_rustweaver.h"
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -2173,6 +2174,7 @@ void game_init()
     load_high_scores();
     vf_init();
     drone_chatter_init();   /* Item 27: pet shield-drone chatter pool */
+    rustweaver_init();      /* Item 23: rust-weaver corrosive-spit drone pool */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -4589,6 +4591,53 @@ static void update_collisions(float dt)
         }
     }
 
+    /* ── 5b. Rust-Weaver hit tests (Item 23) ───────────────────────── */
+    /* (a) Player bolts vs drones — destroys the drone, awards score + XP.
+     *     rustweaver_hit_test deactivates the drone if it's within ~16u of
+     *     the bullet position and returns the slot (>= 0) on success.       */
+    for (int b = 0; b < MAX_BULLETS; b++) {
+        if (!bullets[b].active) continue;
+        int rw_slot = rustweaver_hit_test(bullets[b].pos.x, bullets[b].pos.y);
+        if (rw_slot >= 0) {
+            bullets[b].active = 0;
+            spawn_particles(bullets[b].pos, 16,
+                            (SDL_Color){57, 255, 20, 220});
+            audio_play(SFX_EXPLOSION_MD);
+            spawn_orb(bullets[b].pos, 8);
+            score += 75;
+            spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
+                              "RUSTWEAVER DOWN",
+                              (SDL_Color){57, 255, 20, 240});
+        }
+    }
+
+    /* (b) Rust-Weaver corrosive spit vs player hull — bypasses Ether Shroud
+     *     and Phase Shift per design contract ("degrades hull plating
+     *     directly").  Still respects invuln_timer so the player can't be
+     *     hit during the post-spawn / post-Phase-Shift grace window.       */
+    if (player.active && player.invuln_timer <= 0.0f) {
+        if (rustweaver_check_player_hit(player.pos.x, player.pos.y,
+                                        player.radius + 2.0f)) {
+            if (check_void_stone()) {
+                /* Void Stone armour soaks one hit — treat as a near-miss. */
+            } else {
+                player.active = 0;
+                audio_play(SFX_EXPLOSION_LG);
+                audio_stop(SFX_THRUST);
+                spawn_particles(player.pos, 35,
+                                (SDL_Color){180, 255, 60, 255});
+                spawn_event_float(player.pos.x, player.pos.y - 20.0f,
+                                  "CORROSION", HUD_CINNABAR);
+                cugel9_say("HULL PLATING DISSOLVED. THIS IS WHY WE CAN'T HAVE NICE THINGS.");
+                lives--;
+                if (lives <= 0) {
+                    game_state = STATE_GAMEOVER;
+                    audio_stop(SFX_UFO_LOOP);
+                }
+            }
+        }
+    }
+
     /* ── 6. Bowling Combos: bullet-spawned fragments vs other Void Stones ── */
     /*
      *  When a player bullet destroys an asteroid, its child fragments are tagged
@@ -4709,6 +4758,35 @@ static void update_spawning(float dt)
         rift.angle2     = 0.0f;
         rift.pulse_timer = 0.0f;
         rift.spawn_timer = 5.0f;
+    }
+
+    /* ── Item 23: Rust-Weaver Drone spawn pacing ──────────────────── */
+    /* Slow corrosive drones appear only in Zone 2+ where the danger ramps.
+     * Static timer keeps the pacing private to this function — no extra
+     * globals.  Spawn ring 700–1000 u from player so they drift in over
+     * several seconds; failure to allocate (pool full) backs off briefly. */
+    {
+        static float rustweaver_spawn_timer = 25.0f;
+        if (player.active && player_zone >= 2) {
+            rustweaver_spawn_timer -= dt;
+            if (rustweaver_spawn_timer <= 0.0f) {
+                float ang  = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+                float dist = 700.0f + ((float)rand() / RAND_MAX) * 300.0f;
+                float sx   = player.pos.x + cosf(ang) * dist;
+                float sy   = player.pos.y + sinf(ang) * dist;
+                if (rustweaver_spawn(sx, sy) >= 0) {
+                    /* Re-arm with jitter (35–55 s) so spawns don't clump. */
+                    rustweaver_spawn_timer = 35.0f + (float)(rand() % 21);
+                } else {
+                    /* Pool full — short retry. */
+                    rustweaver_spawn_timer = 5.0f;
+                }
+            }
+        } else {
+            /* Outside Zone 2+ the timer is held at a fresh value so the
+             * first spawn after re-entry isn't immediate. */
+            rustweaver_spawn_timer = 25.0f;
+        }
     }
 
     /*
@@ -5010,6 +5088,7 @@ void game_update(float dt)
     update_ufo_bullets(dt);
     update_particles_orbs_npcs(dt);
     drone_chatter_update(dt);   /* Item 27: tick fade timers on drone chatter floats */
+    rustweaver_update(dt, player.pos.x, player.pos.y);  /* Item 23: rust-weaver AI + spit projectiles */
     update_collisions(dt);
 
     for (int i = 0; i < MAX_ASTEROIDS; i++) {
@@ -5751,6 +5830,12 @@ static void render_entities(void)
      * world→screen subtraction using camera_pos. Called after NPC shapes
      * so floats render on top of the drone diamond glyphs.              */
     drone_chatter_render(g_renderer, camera_pos.x, camera_pos.y);
+
+    /* ── Item 23: rust-weaver drones + corrosive spit ─────────────── */
+    /* Render after NPCs so hostile drones don't get hidden behind the
+     * friendly drones' diamond glyphs.  Module uses raw SDL_RenderDrawLineF
+     * (bypasses vg_set_camera) so it needs the world→screen offset directly. */
+    rustweaver_render(g_renderer, camera_pos.x, camera_pos.y);
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
