@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Item 24 — Scavenger Probes: new module `src/enemy_scavenger.[ch]` (SEEK→TRACTOR→ESCAPE→WARP), wire into game.c init/update/render/collisions and Makefile SRC
+- **Locked Files**: src/game.c, src/enemy_scavenger.c, include/enemy_scavenger.h, Makefile, todo.md, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
