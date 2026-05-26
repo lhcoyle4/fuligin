@@ -55,7 +55,7 @@ Every UI implementation must reference these two sources before touching a pixel
 
 **15. Remnant debris / hidden hazards** — Invisible spatial hazards only revealed with PALE SIGHT Reliquary. No visual cue until equipped.
 
-**16. Fuel clock / reactor drain** — Background drain; rate scales with equipped Reliquaries/weapons. Emergency Drift Mode at 0%: drift, shields fail, hull depletes. Fuel UI uses danger ramp from item 3.
+**16. Fuel clock / reactor drain** ✅ [DONE] — Passive reactor drain (0.08 fuel/s base + 0.04/s per active relic) depletes fuel even without thrusting. At 0% fuel: thrust blocked (Emergency Drift Mode), drift_penalty_timer accumulates; after 10 s adrift the ship takes a hull breach (lose a life, fuel refills to 20% emergency reserve, HULL BREACH EventFloat + screen shake). Fuel UI already uses danger ramp via ui_fuel_color().
 
 **17. Emergency heat vent** ✅ [DONE] — Weapon overheat on rapid fire. Player-triggered coolant blowback: dense forward vector particles + instant reverse thrust, consumes fuel.
 

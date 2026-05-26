@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Active
+- **Status**: Idle
 - **Branch**: agent/claude
-- **Active Task**: Fuel Clock / Reactor Drain (item 16)
-- **Locked Files**: src/game.c, FULIGIN_ACTION_LIST.md, AGENT_STATE.md
+- **Active Task**: None
+- **Locked Files**: None
 - **Last Updated**: 2026-05-25
 
 ## Agent: Gemini (Google)
@@ -42,3 +42,4 @@
 | Claude | Screen-Edge Zone Vignette: PHOTIC RUST tint scaling with zone depth, CINNABAR 2Hz beat pulse | agent/claude | 2026-05-25 |
 | Claude | Gravity Slingshot: tangential boost in rift close orbit (150-380u), GRAVITY ASSIST float | agent/claude | 2026-05-25 |
 | Claude | Mark items 3 (segmented bars), 4 (phosphor decay), 18 (slingshot) as done in action list | agent/claude | 2026-05-25 |
+| Claude | Fuel Clock: passive reactor drain + Emergency Drift Mode (thrust block, hull breach at 10s) | agent/claude | 2026-05-25 |

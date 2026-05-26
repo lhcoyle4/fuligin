@@ -67,6 +67,10 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define WARP_FUEL_COST           20.0f    /* fuel consumed per warp-drive jump */
 #define FUEL_BURN_RATE            3.5f    /* fuel drained per second while thrusting */
 #define FUEL_REGEN_RADIUS       600.0f    /* distance from home at which fuel regenerates */
+#define FUEL_PASSIVE_BASE_RATE    0.08f   /* idle reactor drain even without thrusting */
+#define FUEL_RELIC_RATE           0.04f   /* extra drain per active relic/weapon system */
+#define FUEL_DRIFT_PENALTY_TIME  10.0f   /* seconds adrift before emergency hull breach */
+#define FUEL_DRIFT_RESERVE        0.20f   /* fuel fraction restored on emergency refill */
 #define XP_THRESHOLD_GROWTH       1.6f    /* XP threshold multiplier per player level */
 #define EXTRA_LIFE_SCORE_INTERVAL 10000   /* score increment between extra-life awards */
 
@@ -761,8 +765,9 @@ static int res_shield_caps    = 0;
 static int res_alien_flora    = 0;
 
 /* --- Fuel system --- */
-static float fuel_current = 100.0f;
-static float fuel_max     = 100.0f;
+static float fuel_current        = 100.0f;
+static float fuel_max            = 100.0f;
+static float drift_penalty_timer = 0.0f;   /* seconds in Emergency Drift Mode */
 
 /* --- Player death animation --- */
 static Vec2  player_death_pos   = {0.0f, 0.0f};
@@ -1884,6 +1889,7 @@ static void start_new_game()
     res_isotopes      = 0; res_coolant        = 0; res_medicinals  = 0;
     res_biomatter     = 0; res_shield_caps    = 0; res_alien_flora = 0;
     fuel_current = fuel_max = 100.0f;
+    drift_penalty_timer = 0.0f;
 
     /* Populate warp loci — home base + 4 zone beacons */
     warp_loc_count = 0;
@@ -3034,7 +3040,10 @@ static void update_player_physics(float dt)
         thrust_key_was_down = thrust_key_down;
 
         /* ── Thrust force + fuel burn ──────────────────────────────── */
-        if (thrust_key_down) {
+        /* Emergency Drift Mode: thrust is unavailable at 0 fuel */
+        int in_emergency_drift = (fuel_current <= 0.0f);
+
+        if (thrust_key_down && !in_emergency_drift) {
             player.vel.x += sinf(thrust_angle)
                             * THRUST_FORCE * player_upgrades.speed_mult * dt;
             player.vel.y -= cosf(thrust_angle)
@@ -3047,6 +3056,61 @@ static void update_player_physics(float dt)
         } else {
             is_thrusting = 0;
             audio_stop(SFX_THRUST);
+        }
+
+        /* ── Passive reactor drain (idle + per active relic) ───────────
+         * Even without thrusting the reactor slowly burns fuel.  Each
+         * equipped relic/weapon system adds load.  This creates meaningful
+         * resource tension in the outer zones without punishing early-game
+         * players who haven't collected many relics yet.                  */
+        {
+            int relic_count = player_upgrades.triple_shot
+                            + player_upgrades.shield_active
+                            + player_upgrades.piercing
+                            + player_upgrades.homing
+                            + player_upgrades.rear_gun
+                            + player_upgrades.split_shot
+                            + player_upgrades.mirror_image
+                            + player_upgrades.phase_shift
+                            + player_upgrades.thermal_hull
+                            + player_upgrades.singularity_displacer
+                            + player_upgrades.singularity_whip
+                            + player_upgrades.resonance_cascade
+                            + player_upgrades.vortex_grenade
+                            + player_upgrades.auto_turret
+                            + player_upgrades.nova_explosion;
+            float passive_drain = FUEL_PASSIVE_BASE_RATE
+                                + (float)relic_count * FUEL_RELIC_RATE;
+            fuel_current -= passive_drain * dt;
+            if (fuel_current < 0.0f) fuel_current = 0.0f;
+        }
+
+        /* ── Emergency Drift Mode hull breach penalty ──────────────────
+         * While adrift (fuel == 0), the reactor slowly tears the hull
+         * apart.  After FUEL_DRIFT_PENALTY_TIME seconds the ship takes a
+         * hull breach: player loses a life, fuel is emergency-refilled to
+         * FUEL_DRIFT_RESERVE so the player can limp home.                */
+        if (in_emergency_drift && game_state == STATE_PLAYING) {
+            drift_penalty_timer += dt;
+            if (drift_penalty_timer >= FUEL_DRIFT_PENALTY_TIME) {
+                drift_penalty_timer = 0.0f;
+                fuel_current = fuel_max * FUEL_DRIFT_RESERVE;
+                lives--;
+                spawn_event_float(player.pos.x, player.pos.y - 32.0f,
+                                  "HULL BREACH",
+                                  (SDL_Color){HUD_CINNABAR.r,
+                                              HUD_CINNABAR.g,
+                                              HUD_CINNABAR.b, 255});
+                spawn_particles(player.pos, 30,
+                                (SDL_Color){227, 66, 52, 220});
+                audio_play(SFX_EXPLOSION_SM);
+                screen_shake_timer     = 0.4f;
+                screen_shake_intensity = 6.0f;
+                if (lives <= 0)
+                    game_state = STATE_GAMEOVER;
+            }
+        } else {
+            drift_penalty_timer = 0.0f;
         }
 
         /* Passive fuel regen inside FUEL_REGEN_RADIUS of the home station */
