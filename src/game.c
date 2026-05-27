@@ -52,6 +52,7 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define MAX_PARTICLES    128
 #define MAX_ORBS         100
 #define MAX_CAL_CODES     12   /* Item 39 — calibration code drops (mirrored from entities.h) */
+#define MAX_VOID_RUST_CLOUDS 4 /* Item 40 — void-rust anomaly clouds   (mirrored from entities.h) */
 #define MAX_NPC            4
 #define MAX_STRUCTURE      6
 #define MAX_SCORE_FLOATS  24
@@ -100,6 +101,21 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define SOLAR_FLARE_SHADOW_MULT      1.4f  /* reduced multiplier while in asteroid shadow */
 #define SOLAR_FLARE_MIN_ZONE          1    /* zone 0 (Home Space) is exempt */
 #define SOLAR_FLARE_SHADOW_HALF_W   80.0f  /* perpendicular shadow corridor half-width (world units) */
+/* Void-Rust Anomalies (Item 40, todo.md §4 Plating Durability & Calibration third sub-bullet).
+ * Drifting radioactive gas pockets in Zone 2+.  While player is inside, plating wear ticks
+ * up (reuses Item 38 counter) and bullet aim jitters at the muzzle.  Hiding in the cloud
+ * applies a continuous hazard rather than a one-shot event — the longer you stay, the
+ * more wear accumulates.  Cugel-9 quips on entry and after each tick. */
+#define VOID_RUST_CLOUD_RADIUS_MIN  120.0f  /* min spawn radius (world units)              */
+#define VOID_RUST_CLOUD_RADIUS_MAX  180.0f  /* max spawn radius                            */
+#define VOID_RUST_CLOUD_LIFE         28.0f  /* seconds until a fresh cloud fully dissipates */
+#define VOID_RUST_SPAWN_MIN_IV       45.0f  /* min seconds between cloud spawn attempts    */
+#define VOID_RUST_SPAWN_MAX_IV       80.0f  /* max seconds between cloud spawn attempts    */
+#define VOID_RUST_MIN_ZONE             2    /* Zones 0-1 are clean; clouds spawn 2+        */
+#define VOID_RUST_DAMAGE_INTERVAL     2.5f  /* seconds inside a cloud per +1 plating wear  */
+#define VOID_RUST_ACCURACY_JITTER    0.12f  /* ±radians applied to bullet angle in cloud   */
+#define VOID_RUST_SPAWN_DIST_MIN    800.0f  /* min distance from player to spawn a cloud   */
+#define VOID_RUST_SPAWN_DIST_MAX   1400.0f  /* max distance from player to spawn a cloud   */
 #define XP_THRESHOLD_GROWTH       1.6f    /* XP threshold multiplier per player level */
 #define EXTRA_LIFE_SCORE_INTERVAL 10000   /* score increment between extra-life awards */
 
@@ -256,6 +272,7 @@ typedef struct {
     float reverse_drift_timer;     /* Status: thrust vector inverted (confusion)*/
     float tox_hallucination_timer; /* Status: wireframe scramble (hallucination)*/
     int   plating_wear;            /* Rogue §4: per-run permanent hit counter   */
+    float void_rust_damage_t;      /* Item 40: count-down to next plating tick  */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -419,6 +436,32 @@ typedef struct {
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;
 } CalibrationCodeEntity;
+
+/**
+ * @brief A void-rust anomaly cloud (Item 40, Rogue §4 third sub-bullet).
+ * Mirrored from include/entities.h because game.c uses inline duplicate
+ * struct typedefs rather than including the header directly.  Keep both
+ * definitions in sync.
+ *
+ * Radioactive gas pocket that drifts slowly through space.  While the
+ * player ship is inside the cloud radius, two effects apply:
+ *   1. Plating wear accumulates +1 every VOID_RUST_DAMAGE_INTERVAL
+ *      seconds (uses the same `player.plating_wear` counter as Item 38).
+ *   2. Bullet aim is jittered by ±VOID_RUST_ACCURACY_JITTER radians at
+ *      the muzzle, so shots scatter while the pilot is inside it.
+ * Clouds drift slowly, dissipate after ~28 s, and only spawn in Zone 2+
+ * (Inner Belt and beyond).  Visualised as a concentric arc lattice in a
+ * sickly radioactive yellow-green.
+ */
+typedef struct {
+    int   active;
+    Vec2  pos;
+    Vec2  vel;
+    float radius;
+    float life;
+    float max_life;
+    float wobble;
+} VoidRustCloudEntity;
 
 /**
  * @brief An expanding shockwave ring emitted by certain upgrades (e.g. Nova Shell).
@@ -697,6 +740,7 @@ static UfoEntity      ufo;
 static Particle       particles[MAX_PARTICLES];
 static OrbEntity      orbs[MAX_ORBS];
 static CalibrationCodeEntity cal_codes[MAX_CAL_CODES]; /* Item 39 — plating-repair pickups */
+static VoidRustCloudEntity   void_rust_clouds[MAX_VOID_RUST_CLOUDS]; /* Item 40 — drifting hazard clouds */
 static RiftEntity     rift;
 static RiftEntity     player_rift;
 static GravityWellEntity gravity_wells[MAX_GRAVITY_WELLS];
@@ -828,6 +872,18 @@ static float reverse_drift_roll_t = 0.0f;    /* countdown to next confusion roll
 #define TOX_HALLUCINATION_ROLL_MAX   9.0f /* max seconds between halluc rolls */
 #define TOX_HALLUCINATION_HIT_CHANCE 0.25f /* per-roll probability of halluc  */
 static float tox_hallucination_roll_t = 0.0f; /* countdown to next halluc roll */
+
+/* --- Void-Rust Anomalies (Item 40) ----------------------------------
+ * Drifting radioactive gas pockets that, while the player ship is inside
+ * any active cloud, accumulate plating wear and jitter bullet aim.  Pool
+ * is small (4 simultaneous) so the world doesn't get cluttered.  The
+ * `player_in_void_rust` flag is recomputed each frame in update_progression
+ * and consumed by both the damage-tick path and the bullet-spawn jitter
+ * hook.                                                                */
+static float void_rust_spawn_timer   = 0.0f;  /* countdown to next spawn attempt */
+static float void_rust_next_iv       = 60.0f; /* rolled interval for current cycle */
+static int   player_in_void_rust     = 0;     /* set each frame; consumed by physics + bullet fire */
+static int   void_rust_in_cloud_prev = 0;     /* last-frame flag, for entry-only quip */
 
 /* --- Screen shake --- */
 static float screen_shake_timer     = 0.0f;
@@ -1032,6 +1088,7 @@ static void trigger_hyperspace(void);
 static void spawn_orb(Vec2 pos, int value);
 static void spawn_cal_code(Vec2 pos);                    /* Item 39 — plating repair pickup */
 static void maybe_drop_cal_code(Vec2 pos, float chance); /* Item 39 — RNG drop wrapper      */
+static void spawn_void_rust_cloud(void);                 /* Item 40 — drifting hazard cloud */
 
 /* Progression */
 static void spawn_upgrade_options(void);
@@ -1635,6 +1692,7 @@ static void reset_player(void)
     player.sensor_static_timer = 0.0f; /* Status: clear blindness on respawn */
     player.reverse_drift_timer = 0.0f; /* Status: clear confusion on respawn */
     player.tox_hallucination_timer = 0.0f; /* Status: clear hallucination on respawn */
+    player.void_rust_damage_t = VOID_RUST_DAMAGE_INTERVAL; /* Item 40: fresh damage timer */
 }
 
 /* ----------- Zone Classification ----------- */
@@ -1896,6 +1954,45 @@ static void maybe_drop_cal_code(Vec2 pos, float chance)
     }
 }
 
+/* ── Void-Rust Anomalies (Item 40) ─────────────────────────────────
+ *
+ * Spawns a single radioactive cloud on a random bearing 800-1400 u
+ * from the player.  Cloud picks a random radius in 120-180 u, a slow
+ * drift velocity (15-40 u/s on a random angle), and a 28-second
+ * lifetime.  Called periodically by update_progression() while the
+ * player is in Zone 2 or beyond. */
+static void spawn_void_rust_cloud(void)
+{
+    for (int i = 0; i < MAX_VOID_RUST_CLOUDS; i++) {
+        if (void_rust_clouds[i].active) continue;
+
+        float bearing = ((float)rand() / (float)RAND_MAX) * 2.0f * (float)M_PI;
+        float dist    = VOID_RUST_SPAWN_DIST_MIN
+                      + ((float)rand() / (float)RAND_MAX)
+                        * (VOID_RUST_SPAWN_DIST_MAX
+                           - VOID_RUST_SPAWN_DIST_MIN);
+        float spawn_x = player.pos.x + cosf(bearing) * dist;
+        float spawn_y = player.pos.y + sinf(bearing) * dist;
+
+        float drift_ang = ((float)rand() / (float)RAND_MAX) * 2.0f * (float)M_PI;
+        float drift_spd = 15.0f + 25.0f * ((float)rand() / (float)RAND_MAX);
+        float radius    = VOID_RUST_CLOUD_RADIUS_MIN
+                        + ((float)rand() / (float)RAND_MAX)
+                          * (VOID_RUST_CLOUD_RADIUS_MAX
+                             - VOID_RUST_CLOUD_RADIUS_MIN);
+
+        void_rust_clouds[i].active   = 1;
+        void_rust_clouds[i].pos      = (Vec2){spawn_x, spawn_y};
+        void_rust_clouds[i].vel      = (Vec2){cosf(drift_ang) * drift_spd,
+                                              sinf(drift_ang) * drift_spd};
+        void_rust_clouds[i].radius   = radius;
+        void_rust_clouds[i].life     = VOID_RUST_CLOUD_LIFE;
+        void_rust_clouds[i].max_life = VOID_RUST_CLOUD_LIFE;
+        void_rust_clouds[i].wobble   = 0.0f;
+        return;
+    }
+}
+
 /* =========== PROGRESSION AND UPGRADES =========== */
 
 /** @brief Randomly selects 3 unique relics from the full pool for the player to choose. */
@@ -2126,6 +2223,17 @@ static void start_new_game()
     for (int i = 0; i < MAX_PARTICLES; i++)    particles[i].life      = 0.0f;
     for (int i = 0; i < MAX_ORBS; i++)         orbs[i].active         = 0;
     for (int i = 0; i < MAX_CAL_CODES; i++)    cal_codes[i].active    = 0; /* Item 39 */
+    for (int i = 0; i < MAX_VOID_RUST_CLOUDS; i++)
+        void_rust_clouds[i].active = 0; /* Item 40: clear cloud pool on new game */
+    void_rust_spawn_timer  = 0.0f;       /* Item 40: re-roll first spawn interval */
+    {
+        float t = (float)rand() / (float)RAND_MAX;
+        void_rust_next_iv = VOID_RUST_SPAWN_MIN_IV
+            + t * (VOID_RUST_SPAWN_MAX_IV - VOID_RUST_SPAWN_MIN_IV);
+        void_rust_spawn_timer = void_rust_next_iv;
+    }
+    player_in_void_rust    = 0;
+    void_rust_in_cloud_prev = 0;
     for (int i = 0; i < MAX_SCORE_FLOATS; i++) score_floats[i].active = 0;
     for (int i = 0; i < MAX_EVENT_FLOATS; i++)  event_floats[i].active  = 0;
     for (int i = 0; i < MAX_GRAVITY_WELLS; i++) gravity_wells[i].active = 0;
@@ -2339,6 +2447,17 @@ void game_init()
     scavenger_init();       /* Item 24: scavenger probes — void-steel theft units  */
     for (int i = 0; i < MAX_CAL_CODES; i++)
         cal_codes[i].active = 0; /* Item 39: calibration code pickup pool */
+    for (int i = 0; i < MAX_VOID_RUST_CLOUDS; i++)
+        void_rust_clouds[i].active = 0; /* Item 40: void-rust anomaly pool */
+    void_rust_spawn_timer = 0.0f;
+    {
+        float t = (float)rand() / (float)RAND_MAX;
+        void_rust_next_iv = VOID_RUST_SPAWN_MIN_IV
+            + t * (VOID_RUST_SPAWN_MAX_IV - VOID_RUST_SPAWN_MIN_IV);
+        void_rust_spawn_timer = void_rust_next_iv;
+    }
+    player_in_void_rust     = 0;
+    void_rust_in_cloud_prev = 0;
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -2352,6 +2471,7 @@ void game_init()
     player.reverse_drift_timer = 0.0f;
     player.tox_hallucination_timer = 0.0f;
     player.plating_wear = 0;        /* Rogue §4: clear per-run wear at fresh game start */
+    player.void_rust_damage_t = VOID_RUST_DAMAGE_INTERVAL; /* Item 40: fresh damage timer */
     player.trail_head = 0;
     for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
         player.trail_pos[i] = (Vec2){0.0f, 0.0f};
@@ -3403,6 +3523,28 @@ static void update_player_physics(float dt)
             if (player.tox_hallucination_timer < 0.0f) player.tox_hallucination_timer = 0.0f;
         }
 
+        /* ── Void-Rust Anomaly damage tick (Item 40) ────────────────────
+         * `player_in_void_rust` is set by update_progression() each frame.
+         * While inside any active cloud, count down `void_rust_damage_t`;
+         * on each rollover increment plating_wear by 1, spawn a small
+         * amber "PLATING -1" pop-up, play the impact SFX, and fire the
+         * Cugel-9 escalation quip if we just crossed the heavy threshold.
+         * Outside any cloud the timer is held at VOID_RUST_DAMAGE_INTERVAL
+         * by update_progression() so re-entry doesn't instantly tick. */
+        if (player_in_void_rust && player.active) {
+            player.void_rust_damage_t -= dt;
+            if (player.void_rust_damage_t <= 0.0f) {
+                player.plating_wear += 1;
+                spawn_event_float(player.pos.x, player.pos.y - 30.0f,
+                                  "PLATING -1", HUD_AMBER);
+                audio_play(SFX_EXPLOSION_SM);
+                if (player.plating_wear == PLATING_WEAR_HEAVY_THRESH) {
+                    cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+                }
+                player.void_rust_damage_t = VOID_RUST_DAMAGE_INTERVAL;
+            }
+        }
+
         /* ── Singularity Displacer: double-tap thrust to rift-jump ── */
         static Uint32 last_thrust_tap    = 0;
         static int    thrust_key_was_down = 0;
@@ -3660,6 +3802,13 @@ static void update_player_physics(float dt)
                     if (!bullets[i].active) {
                         float ang = base_fire_angle;
                         if (bolts_to_fire == 3) ang += (b - 1) * spread;
+                        /* Item 40: void-rust accuracy degradation — each
+                         * bullet picks up an independent muzzle jitter so
+                         * triple-shot still scatters realistically. */
+                        if (player_in_void_rust) {
+                            float jr = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+                            ang += jr * VOID_RUST_ACCURACY_JITTER;
+                        }
 
                         float nose_x = player.pos.x + sinf(ang) * 12.0f;
                         float nose_y = player.pos.y - cosf(ang) * 12.0f;
@@ -3694,6 +3843,12 @@ static void update_player_physics(float dt)
                 for (int i = 0; i < MAX_BULLETS; i++) {
                     if (!bullets[i].active) {
                         float rear_ang = base_fire_angle + (float)M_PI;
+                        /* Item 40: rear gun gets its own jitter so the
+                         * scatter is independent of the prow bolts. */
+                        if (player_in_void_rust) {
+                            float jr = ((float)rand() / (float)RAND_MAX) * 2.0f - 1.0f;
+                            rear_ang += jr * VOID_RUST_ACCURACY_JITTER;
+                        }
                         float rear_x   = player.pos.x
                                          - sinf(base_fire_angle) * 12.0f;
                         float rear_y   = player.pos.y
@@ -5813,6 +5968,84 @@ static void update_progression(float dt)
          * dock-and-leave. */
         solar_flare_in_shadow = 0;
     }
+
+    /* ── Void-Rust Anomalies (Item 40, Rogue §4 third sub-bullet) ─────
+     *
+     * Drifting radioactive gas pockets in Zone 2+.  Each frame we:
+     *   1. Tick lifetime of existing clouds, drift positions, deactivate
+     *      expired ones (smooth dissipation via alpha fade in render).
+     *   2. Scan clouds vs player position — if any contains the ship,
+     *      set player_in_void_rust = 1.  The bullet-fire site reads
+     *      this flag at muzzle time to apply ±VOID_RUST_ACCURACY_JITTER.
+     *      The player-physics tick decrements `player.void_rust_damage_t`
+     *      while the flag is high; when it hits zero we add +1 plating
+     *      wear, spawn an amber "VOID RUST" float, and reset the timer.
+     *   3. Roll a periodic spawn while the player is in Zone 2+ —
+     *      VOID_RUST_SPAWN_MIN_IV to MAX_IV seconds between attempts.
+     *      The spawn site sits 800-1400 u from the player on a random
+     *      bearing, so clouds appear as drifting hazards in the player's
+     *      navigation arc, not on top of them.
+     */
+    {
+        /* (1) Tick + drift existing clouds */
+        for (int i = 0; i < MAX_VOID_RUST_CLOUDS; i++) {
+            if (!void_rust_clouds[i].active) continue;
+            void_rust_clouds[i].life   -= dt;
+            void_rust_clouds[i].wobble += dt * 1.4f;
+            void_rust_clouds[i].pos.x  += void_rust_clouds[i].vel.x * dt;
+            void_rust_clouds[i].pos.y  += void_rust_clouds[i].vel.y * dt;
+            if (void_rust_clouds[i].life <= 0.0f) {
+                void_rust_clouds[i].active = 0;
+            }
+        }
+
+        /* (2) Containment check — does any cloud overlap the player? */
+        int in_cloud = 0;
+        if (player.active) {
+            for (int i = 0; i < MAX_VOID_RUST_CLOUDS; i++) {
+                if (!void_rust_clouds[i].active) continue;
+                float dx = void_rust_clouds[i].pos.x - player.pos.x;
+                float dy = void_rust_clouds[i].pos.y - player.pos.y;
+                float r  = void_rust_clouds[i].radius + player.radius;
+                if (dx*dx + dy*dy <= r*r) {
+                    in_cloud = 1;
+                    break;
+                }
+            }
+        }
+        player_in_void_rust = in_cloud;
+
+        /* Entry quip + float (only once per cloud entry, not every frame) */
+        if (in_cloud && !void_rust_in_cloud_prev && player.active) {
+            spawn_event_float(player.pos.x, player.pos.y - 24.0f,
+                              "VOID RUST",
+                              (SDL_Color){170, 220, 70, 240});
+            cugel9_say("RADIOACTIVE GAS POCKET. AIM DEGRADED. PLATING DISSOLVING. NOMINAL.");
+        }
+        void_rust_in_cloud_prev = in_cloud;
+
+        /* If outside any cloud, keep the damage timer charged so the
+         * next entry starts a fresh tick rather than firing instantly. */
+        if (!in_cloud && player.active) {
+            player.void_rust_damage_t = VOID_RUST_DAMAGE_INTERVAL;
+        }
+
+        /* (3) Periodic spawn while in Zone 2+ */
+        if (player.active
+            && (game_state == STATE_PLAYING
+                || game_state == STATE_ATTRACT_GAMEPLAY)
+            && player_zone >= VOID_RUST_MIN_ZONE)
+        {
+            void_rust_spawn_timer -= dt;
+            if (void_rust_spawn_timer <= 0.0f) {
+                spawn_void_rust_cloud();
+                float t = (float)rand() / (float)RAND_MAX;
+                void_rust_next_iv = VOID_RUST_SPAWN_MIN_IV
+                    + t * (VOID_RUST_SPAWN_MAX_IV - VOID_RUST_SPAWN_MIN_IV);
+                void_rust_spawn_timer = void_rust_next_iv;
+            }
+        }
+    }
 }
 
 /* ================================================================== */
@@ -6557,6 +6790,82 @@ static void render_entities(void)
         float scale = 1.0f + 0.08f * sinf(cal_codes[i].spin * 5.0f);
         vg_draw_shape(&cs, cal_codes[i].pos,
                       cal_codes[i].spin * 0.3f, scale);
+    }
+
+    /* ── Void-Rust Anomaly clouds (Item 40, Rogue §4 third sub-bullet)
+     * Sickly radioactive yellow-green concentric arc lattice with drifting
+     * "particle" dots inside.  Rendered before asteroids so rocks read on
+     * top of the haze.  Per-frame wobble offsets give the cloud a churning
+     * gas-pocket feel.  Alpha fades on both ends of the cloud's life:
+     * fade-in over the first 1.2 s, fade-out over the final 3 s. */
+    for (int i = 0; i < MAX_VOID_RUST_CLOUDS; i++) {
+        if (!void_rust_clouds[i].active) continue;
+        const VoidRustCloudEntity *c = &void_rust_clouds[i];
+
+        /* Alpha envelope: ramp in 0→1 over the first 1.2 s, hold, then
+         * ramp 1→0 over the final 3 s of the cloud's life. */
+        float lived = c->max_life - c->life;
+        float fade_in  = (lived < 1.2f) ? (lived / 1.2f) : 1.0f;
+        float fade_out = (c->life < 3.0f) ? (c->life / 3.0f) : 1.0f;
+        if (fade_in  < 0.0f) fade_in  = 0.0f;
+        if (fade_out < 0.0f) fade_out = 0.0f;
+        float env  = fade_in * fade_out;
+        if (env <= 0.001f) continue;
+
+        /* Three concentric arc rings at 100% / 78% / 52% of the cloud
+         * radius.  Each ring is a 14-segment line loop with a tiny
+         * per-vertex wobble keyed off the cloud's animation phase, so
+         * the silhouette pulses like a churning gas pocket rather than
+         * holding rigid.  Sickly yellow-green = (170, 220, 70). */
+        for (int ring = 0; ring < 3; ring++) {
+            float ring_r   = c->radius * (1.0f - (float)ring * 0.24f);
+            float ring_phase = c->wobble * (1.0f + (float)ring * 0.2f);
+            int   verts    = 14;
+            float ring_a   = (ring == 0) ? 0.55f
+                            : (ring == 1) ? 0.42f : 0.30f;
+            Uint8 alpha    = (Uint8)(180.0f * ring_a * env);
+            SDL_Color rust_col = (SDL_Color){170, 220, 70, alpha};
+
+            Line ring_lines[14];
+            for (int v = 0; v < verts; v++) {
+                float t0 = (float)v       / (float)verts * 2.0f * (float)M_PI;
+                float t1 = (float)(v + 1) / (float)verts * 2.0f * (float)M_PI;
+                float wob0 = sinf(t0 * 2.7f + ring_phase) * 6.0f;
+                float wob1 = sinf(t1 * 2.7f + ring_phase) * 6.0f;
+                float r0   = ring_r + wob0;
+                float r1   = ring_r + wob1;
+                Vec2 p0 = { cosf(t0) * r0, sinf(t0) * r0 };
+                Vec2 p1 = { cosf(t1) * r1, sinf(t1) * r1 };
+                ring_lines[v] = (Line){p0, p1};
+            }
+            Shape rs = { ring_lines, verts, rust_col };
+            vg_draw_shape(&rs, c->pos, 0.0f, 1.0f);
+        }
+
+        /* Drifting "speck" particles inside the cloud — 6 short line
+         * segments scattered at random radii, animated by the wobble
+         * phase so they appear to swirl.  Anchored deterministically
+         * to the cloud index so individual specks persist frame-to-frame
+         * rather than strobing randomly. */
+        {
+            int speck_count = 6;
+            for (int s = 0; s < speck_count; s++) {
+                float sphase = c->wobble * 0.8f
+                             + (float)s * 1.27f
+                             + (float)i * 0.7f;
+                float sr     = c->radius * (0.30f + 0.55f
+                                            * (0.5f + 0.5f * sinf(sphase * 1.13f)));
+                float sa     = sphase + (float)s * 0.9f;
+                Vec2 sp0 = { cosf(sa) * sr,        sinf(sa) * sr };
+                Vec2 sp1 = { cosf(sa) * (sr + 4.0f),
+                             sinf(sa) * (sr + 4.0f) };
+                Uint8 salpha = (Uint8)(180.0f * env);
+                SDL_Color speck_col = (SDL_Color){200, 240, 100, salpha};
+                Line sl = (Line){sp0, sp1};
+                Shape ss = { &sl, 1, speck_col };
+                vg_draw_shape(&ss, c->pos, 0.0f, 1.0f);
+            }
+        }
     }
 
     /* ── Star-Shadow vector lines (Solar Flare lore tie-in) ─────────

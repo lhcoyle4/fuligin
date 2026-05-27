@@ -21,6 +21,7 @@
 #define MAX_PARTICLES    128
 #define MAX_ORBS         100
 #define MAX_CAL_CODES     12   /* calibration code drops (Item 39, Rogue §4 scrolls-of-enchant-armor analogue) */
+#define MAX_VOID_RUST_CLOUDS 4 /* void-rust anomaly clouds (Item 40, Rogue §4 third sub-bullet)                */
 #define MAX_NPC            4
 #define MAX_STRUCTURE      6
 #define MAX_SCORE_FLOATS  24
@@ -208,6 +209,11 @@ typedef struct {
                                     * combat impact; adds FUEL_PLATING_WEAR_RATE per point
                                     * to passive reactor drain. Does NOT reset on respawn —
                                     * survives across lives, cleared only on new game. */
+    float void_rust_damage_t;      /* Rogue §4 Void-Rust Anomalies: countdown until next
+                                    * plating-wear tick while inside a void-rust cloud.
+                                    * Reset to VOID_RUST_DAMAGE_INTERVAL each frame the
+                                    * player is outside any cloud, so the next entry has
+                                    * a fresh damage timer. */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -366,6 +372,28 @@ typedef struct {
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;
 } CalibrationCodeEntity;
+
+/**
+ * @brief A void-rust anomaly cloud (Item 40, Rogue §4 third sub-bullet).
+ * Radioactive gas pocket that drifts slowly through space.  While the
+ * player ship is inside the cloud radius, two effects apply:
+ *   1. Plating wear accumulates +1 every VOID_RUST_DAMAGE_INTERVAL seconds
+ *      (uses the same `player.plating_wear` counter as Items 38/39).
+ *   2. Bullet aim is jittered by ±VOID_RUST_ACCURACY_JITTER radians at
+ *      muzzle, so shots scatter slightly while the pilot is bathed in it.
+ * Clouds drift slowly, dissipate after ~28 s, and only spawn in Zone 2+
+ * (Inner Belt and beyond — Home Space is clean).  Visualised as a
+ * concentric arc lattice in a sickly radioactive yellow-green.
+ */
+typedef struct {
+    int   active;
+    Vec2  pos;
+    Vec2  vel;
+    float radius;        /* world-space cloud radius */
+    float life;          /* seconds until dissipation */
+    float max_life;      /* original life (for alpha fade) */
+    float wobble;        /* animation phase accumulator */
+} VoidRustCloudEntity;
 
 /**
  * @brief An expanding shockwave ring emitted by certain upgrades (e.g. Nova Shell).
