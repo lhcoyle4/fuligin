@@ -202,6 +202,11 @@ typedef struct {
     float sensor_static_timer;     /* Status: sensor blackout (blindness) secs  */
     float reverse_drift_timer;     /* Status: thrust vector inverted (confusion)*/
     float tox_hallucination_timer; /* Status: wireframe scramble (hallucination)*/
+    int   plating_wear;            /* Rogue §4 Ablative Plating Wear: per-run permanent
+                                    * damage counter. Increments by 1 on each non-fatal
+                                    * combat impact; adds FUEL_PLATING_WEAR_RATE per point
+                                    * to passive reactor drain. Does NOT reset on respawn —
+                                    * survives across lives, cleared only on new game. */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */

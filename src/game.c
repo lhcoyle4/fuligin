@@ -83,6 +83,8 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define FUEL_RELIC_RATE           0.04f   /* extra drain per active relic/weapon system */
 #define FUEL_DRIFT_PENALTY_TIME  10.0f   /* seconds adrift before emergency hull breach */
 #define FUEL_DRIFT_RESERVE        0.20f   /* fuel fraction restored on emergency refill */
+#define FUEL_PLATING_WEAR_RATE    0.005f  /* extra drain per accumulated ablative-plating-wear point (Rogue §4) */
+#define PLATING_WEAR_HEAVY_THRESH 15      /* wear count above which Cugel-9 starts complaining */
 /* Solar Flare Cycles (todo.md §2.3 / Lore §3) + Star-Shadow Radiation Shielding
  * (todo.md §3 / Lore §3 second half).  Periodic flares triple passive reactor
  * drain in non-Home zones.  When a large/medium asteroid lies between the
@@ -252,6 +254,7 @@ typedef struct {
     float sensor_static_timer;     /* Status: sensor blackout (blindness) secs  */
     float reverse_drift_timer;     /* Status: thrust vector inverted (confusion)*/
     float tox_hallucination_timer; /* Status: wireframe scramble (hallucination)*/
+    int   plating_wear;            /* Rogue §4: per-run permanent hit counter   */
     Vec2  trail_pos[PHOS_TRAIL_LEN];
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;              /* ring-buffer write index */
@@ -2273,6 +2276,7 @@ void game_init()
     player.sensor_static_timer = 0.0f;
     player.reverse_drift_timer = 0.0f;
     player.tox_hallucination_timer = 0.0f;
+    player.plating_wear = 0;        /* Rogue §4: clear per-run wear at fresh game start */
     player.trail_head = 0;
     for (int i = 0; i < PHOS_TRAIL_LEN; i++) {
         player.trail_pos[i] = (Vec2){0.0f, 0.0f};
@@ -3393,7 +3397,14 @@ static void update_player_physics(float dt)
                             + player_upgrades.auto_turret
                             + player_upgrades.nova_explosion;
             float passive_drain = FUEL_PASSIVE_BASE_RATE
-                                + (float)relic_count * FUEL_RELIC_RATE;
+                                + (float)relic_count * FUEL_RELIC_RATE
+                                + (float)player.plating_wear * FUEL_PLATING_WEAR_RATE;
+            /* Ablative Plating Wear (Rogue §4): every accumulated wear point
+             * adds FUEL_PLATING_WEAR_RATE (0.005) to the per-second reactor
+             * drain.  At 16 wear points (HEAVY_THRESH+1) the wear adds the
+             * same as the base passive rate — the ship is effectively
+             * burning fuel twice as fast as a fresh hull.  This stacks
+             * multiplicatively with Solar Flare below. */
             /* Solar Flare drain hook (todo.md §2.3 / §3): during ACTIVE
              * phase the drain triples (SOLAR_FLARE_FUEL_MULT); if a large
              * asteroid is between the player and the dying sun, the
@@ -4671,6 +4682,16 @@ static void update_collisions(float dt)
                 spawn_asteroid(asteroids[a].pos, next);
             }
 
+            /* Ablative Plating Wear (Rogue §4): combat impact eats a point
+             * of ablative plating, permanently raising passive fuel drain.
+             * Counter persists across respawns within the run. */
+            player.plating_wear += 1;
+            spawn_event_float(player.pos.x, player.pos.y - 8.0f,
+                              "PLATING -1", HUD_AMBER);
+            if (player.plating_wear == PLATING_WEAR_HEAVY_THRESH) {
+                cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+            }
+
             lives--;
             if (lives <= 0) {
                 game_state = STATE_GAMEOVER;
@@ -4705,6 +4726,13 @@ static void update_collisions(float dt)
                 spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                                   "HIT", HUD_CINNABAR);
                 cugel9_say("DIRECT IMPACT DETECTED. RECORDING FINAL MOMENTS FOR POSTERITY.");
+                /* Ablative Plating Wear (Rogue §4): combat impact wear tick */
+                player.plating_wear += 1;
+                spawn_event_float(player.pos.x, player.pos.y - 8.0f,
+                                  "PLATING -1", HUD_AMBER);
+                if (player.plating_wear == PLATING_WEAR_HEAVY_THRESH) {
+                    cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+                }
                 lives--;
                 if (lives <= 0) game_state = STATE_GAMEOVER;
                 ufo_spawn_timer = 20.0f + ((float)rand() / RAND_MAX) * 15.0f;
@@ -4753,6 +4781,13 @@ static void update_collisions(float dt)
                                     (SDL_Color){255, 200, 100, 255});
                     spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                                       "HIT", HUD_CINNABAR);
+                    /* Ablative Plating Wear (Rogue §4): combat impact wear tick */
+                    player.plating_wear += 1;
+                    spawn_event_float(player.pos.x, player.pos.y - 8.0f,
+                                      "PLATING -1", HUD_AMBER);
+                    if (player.plating_wear == PLATING_WEAR_HEAVY_THRESH) {
+                        cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+                    }
                     lives--;
                     if (lives <= 0) {
                         game_state = STATE_GAMEOVER;
@@ -4799,6 +4834,13 @@ static void update_collisions(float dt)
                 spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                                   "INTERCEPTED", HUD_MAGENTA);
                 cugel9_say("ASCIAN BOLT BREACHED THE HULL. PERHAPS YOU SHOULD HAVE DODGED.");
+                /* Ablative Plating Wear (Rogue §4): combat impact wear tick */
+                player.plating_wear += 1;
+                spawn_event_float(player.pos.x, player.pos.y - 8.0f,
+                                  "PLATING -1", HUD_AMBER);
+                if (player.plating_wear == PLATING_WEAR_HEAVY_THRESH) {
+                    cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+                }
                 lives--;
                 if (lives <= 0) {
                     game_state = STATE_GAMEOVER;
@@ -4849,6 +4891,13 @@ static void update_collisions(float dt)
                 spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                                   "PURSUED", HUD_CINNABAR);
                 cugel9_say("LICTOR RAN YOU DOWN. PREDICTABLE OUTCOME, GIVEN YOUR PILOTING.");
+                /* Ablative Plating Wear (Rogue §4): combat impact wear tick */
+                player.plating_wear += 1;
+                spawn_event_float(player.pos.x, player.pos.y - 8.0f,
+                                  "PLATING -1", HUD_AMBER);
+                if (player.plating_wear == PLATING_WEAR_HEAVY_THRESH) {
+                    cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+                }
                 lives--;
                 if (lives <= 0) {
                     game_state = STATE_GAMEOVER;
@@ -4986,6 +5035,16 @@ static void update_collisions(float dt)
                 spawn_event_float(player.pos.x, player.pos.y - 20.0f,
                                   "CORROSION", HUD_CINNABAR);
                 cugel9_say("HULL PLATING DISSOLVED. THIS IS WHY WE CAN'T HAVE NICE THINGS.");
+                /* Ablative Plating Wear (Rogue §4): corrosive spit eats
+                 * plating twice as fast as ordinary impact (lore: it
+                 * literally dissolves the ablative layer).            */
+                player.plating_wear += 2;
+                spawn_event_float(player.pos.x, player.pos.y - 8.0f,
+                                  "PLATING -2", HUD_AMBER);
+                if (player.plating_wear >= PLATING_WEAR_HEAVY_THRESH
+                    && player.plating_wear - 2 < PLATING_WEAR_HEAVY_THRESH) {
+                    cugel9_say("HULL PLATING CRITICAL. REACTOR SEAL IS NOW DECORATIVE.");
+                }
                 lives--;
                 if (lives <= 0) {
                     game_state = STATE_GAMEOVER;
