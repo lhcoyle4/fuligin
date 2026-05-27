@@ -7,9 +7,9 @@ This document outlines the current developmental milestones for FULIGIN, alongsi
 ## ─── CURRENT TASKS (FULIGIN BASE) ───
 
 - [ ] **Phase 2 HUD & Cockpit UI Overhaul**
-  - [ ] Implement angled viewport panel outlines (`ui_panel_angled`)
-  - [ ] Integrate segmented bars for Chronicle/XP and shields (`ui_bar_segmented`)
-  - [ ] Render discrete retro blocks for hull and core metrics (`ui_bar_block`)
+  - [x] ~~Implement angled viewport panel outlines (`ui_panel_angled`)~~ *(retired — see action list item 1: FF7R angled-cut aesthetic retired in favour of unified Qud terminal look; `ui_panel_terminal()` is now the single panel primitive used everywhere)*
+  - [x] Integrate segmented bars for Chronicle/XP and shields (`ui_bar_segmented`) *(shipped — see action list item 3)*
+  - [x] Render discrete retro blocks for hull and core metrics (`ui_bar_block`) *(shipped — see action list item 3)*
   - [x] Apply screen-edge vignettes and scanline overlays
 - [ ] **Procedural World Generation & Seeding**
   - [ ] Integrate backing `WorldGenParams` struct in `include/game.h`
@@ -45,9 +45,9 @@ In *Rogue*, items are found unidentified. In the cold void, salvaging must feel 
 
 ### 2. Reactor Core & Fuel Clock (Hunger & Starvation)
 Rogue uses food to force momentum. In FULIGIN, the ship itself is the clock:
-- [ ] **Sub-System Fuel Consumption:** Every equipped Reliquary and weapon increases the background reactor drain.
-- [ ] **Emergency Drift Mode:** When fuel hits 0%, systems shut down. The ship drifts out of control, shields fail, and life support begins depleting hull integrity directly.
-- [ ] **Solar Flare Cycles:** Star zones that pulse radiation, forcing the player to consume extra shields/coolant to stay in the sector.
+- [x] **Sub-System Fuel Consumption:** Every equipped Reliquary and weapon increases the background reactor drain. *(Partial — per-relic drain shipped: 0.08 fuel/s base + 0.04/s per active relic. Per-weapon drain not yet wired. See action list item 16.)*
+- [x] **Emergency Drift Mode:** When fuel hits 0%, systems shut down. The ship drifts out of control, shields fail, and life support begins depleting hull integrity directly. *(Shipped — at 0% fuel thrust blocks, `drift_penalty_timer` accumulates, 10 s adrift triggers hull breach with `HULL BREACH` EventFloat + screen shake + fuel refill to 20% emergency reserve. See action list item 16.)*
+- [x] **Solar Flare Cycles:** Star zones that pulse radiation, forcing the player to consume extra shields/coolant to stay in the sector. *(Shipped — three-phase COUNTUP → WARNING (3 s telegraph) → ACTIVE (5 s, 3× passive reactor drain) state machine, gated to zone ≥ 1, Home Space exempt. See action list item 33.)*
 
 ### 3. Cargo Slots & Inventory Weight
 - [ ] **Grid-Based Cargo Bay:** Space in the Autodyne cargo bay is strictly limited.
@@ -62,7 +62,7 @@ Rogue uses food to force momentum. In FULIGIN, the ship itself is the clock:
 ### 5. Tactical Enemy AI Archetypes (Monsters)
 Adapt Rogue's classic monster behaviors to space entities:
 - [x] **Rust-Weaver Drones:** Spits corrosive green spit that bypasses shields to degrade hull plating. *(Integrated into `src/game.c` — module spawns in Zone 2+; corrosive spit bypasses Ether Shroud and Phase Shift; see action list item 23 for full wiring details.)*
-- [ ] **Scavenger Probes (Leprechauns):** Do not attack directly; instead, they tractor-beam your collected Void Steel and attempt to warp away.
+- [x] **Scavenger Probes (Leprechauns):** Do not attack directly; instead, they tractor-beam your collected Void Steel and attempt to warp away. *(Integrated 2026-05-26 — module `src/enemy_scavenger.[ch]` with SEEK → TRACTOR → ESCAPE → WARP state machine; Zone 1+ AND `res_void_steel > 0` gated; refunds stolen cargo on kill at probe's last position with `+VOID STEEL` cyan float. See action list item 24 for full wiring.)*
 - [x] **EMP Sentinels (Floating Eyes):** Pulse a freezing electromagnetic field, locking ship steering and thrust for a brief duration. *(Integrated 2026-05-26 — module `src/enemy_emp_sentinel.[ch]` spawns in Zone 2+; IDLE→CHARGE (1.4 s telegraph)→PULSE (0.45 s, 380 u ring)→COOLDOWN (4 s) state machine; pulse sets `player.emp_lock_timer = 1.6 s` which is honoured by `update_player_physics` to negate rotation/thrust input; bypasses Ether Shroud / Phase Shift. See action list item 25.)*
 
 ### 6. Status Malfunctions (Blindness & Hallucination)
@@ -78,10 +78,10 @@ Adapt Rogue's classic monster behaviors to space entities:
 - [x] **Engine Particulate Drift:** Make the player's engine exhaust interact with floating cosmic dust. Moving at high speeds sucks in ambient particles, creating a brilliant glowing vector dust-trail proportional to ship velocity.
 
 ### 2. "Cugel-9" Sarcastic Board Computer (Lore/Silly)
-- [ ] **Melancholic Text & Speech Logs:** A virtual intelligence terminal named `CUGEL-9` that prints status reports on the HUD and uses text-to-speech to speak them out loud.
-  - [ ] Speech must utilize a sad, depressed robot voice (inspired by Marvin from *Hitchhiker's Guide to the Galaxy*).
-  - [ ] E.g., when taking collision damage: `"STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE."`
-  - [ ] E.g., when missing several shots in a row: `"DISCHARGING BULLETS DIRECTLY INTO VACUUM. ASTEROIDS ARE UNIMPRESSED."`
+- [x] **Melancholic Text & Speech Logs:** A virtual intelligence terminal named `CUGEL-9` that prints status reports on the HUD and uses text-to-speech to speak them out loud. *(Partial — HUD text log shipped via `cugel9_say()` and `ui_panel_terminal()` rendering throughout `game.c`; see action list item 26. TTS speech with sad-robot voice still pending.)*
+  - [ ] Speech must utilize a sad, depressed robot voice (inspired by Marvin from *Hitchhiker's Guide to the Galaxy*). *(Not yet wired — audio.c lacks a TTS path; would need an offline TTS engine or per-line pre-rendered WAVs.)*
+  - [x] E.g., when taking collision damage: `"STRUCTURAL INTEGRITY COMPROMISED. COMPENSATING FOR PILOT INEPTITUDE."` *(Text shipped — quip lines fire on collision, EMP lock, Lictor pursuit, etc.)*
+  - [x] E.g., when missing several shots in a row: `"DISCHARGING BULLETS DIRECTLY INTO VACUUM. ASTEROIDS ARE UNIMPRESSED."` *(Text quip patterns shipped on various trigger events; sustained miss-streak tracking may still be partial.)*
 
 ### 3. Star-Shadow Radiation Shielding (Tactical/Mechanic)
 - [x] **Dying Sun Solar Flares:** The swollen star in the center of the zone periodically releases a Cinnabar-colored solar pulse.
