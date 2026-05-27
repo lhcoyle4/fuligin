@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Item 15 — Remnant Debris (Hidden Hazards) + wire PALE SIGHT relic effect
+- **Locked Files**: include/entities.h, src/game.c, todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-27
 
 ## Agent: Gemini (Google)
