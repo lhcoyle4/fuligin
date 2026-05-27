@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Void-Rust Anomalies (Item 40, todo.md §4 third sub-bullet) — radioactive gas clouds that dissolve plating and erode bolt accuracy in Zone 2+
+- **Locked Files**: include/entities.h, src/game.c, todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-27
 
 ## Agent: Gemini (Google)
