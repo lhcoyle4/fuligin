@@ -2,10 +2,10 @@
 <!-- Updated by agents before and after every task. See COWORKING_PROTOCOL.md. -->
 
 ## Agent: Claude (Anthropic)
-- **Status**: Idle
+- **Status**: Active
 - **Branch**: agent/claude
-- **Active Task**: None
-- **Locked Files**: None
+- **Active Task**: Item 39 — Calibration Codes (Rogue §4 second sub-bullet): plating-repair pickup drops from killed enemies, decrements player.plating_wear on collection
+- **Locked Files**: include/entities.h, src/game.c, AGENT_STATE.md, todo.md, FULIGIN_ACTION_LIST.md
 - **Last Updated**: 2026-05-26
 
 ## Agent: Gemini (Google)
