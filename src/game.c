@@ -51,6 +51,7 @@ extern SDL_Window   *g_window;   /* defined in main.c */
 #define MAX_UFO_BULLETS   32
 #define MAX_PARTICLES    128
 #define MAX_ORBS         100
+#define MAX_CAL_CODES     12   /* Item 39 — calibration code drops (mirrored from entities.h) */
 #define MAX_NPC            4
 #define MAX_STRUCTURE      6
 #define MAX_SCORE_FLOATS  24
@@ -396,6 +397,30 @@ typedef struct {
 } OrbEntity;
 
 /**
+ * @brief A calibration-code pickup (Item 39, Rogue §4 Calibration Codes).
+ * Mirrored from include/entities.h because game.c uses inline duplicate
+ * struct typedefs rather than including the header directly. Keep both
+ * definitions in sync.
+ *
+ * Rare drop from killed combat enemies (UFO/Ascian/Lictor/Rust-Weaver/EMP
+ * Sentinel/Scavenger). On collection decrements `player.plating_wear` by 1
+ * (or awards a 50-point consolation score if plating is already pristine).
+ * Drifts like a Chronicle Orb — magnet-attracted, finite lifetime, despawn
+ * on distance. Rendered as an amber bracket-corner box so it reads as a
+ * salvaged memory chip rather than a regular orb.
+ */
+typedef struct {
+    int   active;
+    Vec2  pos;
+    Vec2  vel;
+    float life;          /* lifetime seconds until despawn (drops persist longer than orbs) */
+    float spin;          /* rotation accumulator for bracket-corner pulse animation        */
+    Vec2  trail_pos[PHOS_TRAIL_LEN];
+    float trail_ang[PHOS_TRAIL_LEN];
+    int   trail_head;
+} CalibrationCodeEntity;
+
+/**
  * @brief An expanding shockwave ring emitted by certain upgrades (e.g. Nova Shell).
  * Grows from radius=0 to max_radius while fading its alpha.
  */
@@ -671,6 +696,7 @@ static BulletEntity   ufo_bullets[MAX_UFO_BULLETS];
 static UfoEntity      ufo;
 static Particle       particles[MAX_PARTICLES];
 static OrbEntity      orbs[MAX_ORBS];
+static CalibrationCodeEntity cal_codes[MAX_CAL_CODES]; /* Item 39 — plating-repair pickups */
 static RiftEntity     rift;
 static RiftEntity     player_rift;
 static GravityWellEntity gravity_wells[MAX_GRAVITY_WELLS];
@@ -1004,6 +1030,8 @@ static void init_home_area(void);
 static void spawn_ufo(void);
 static void trigger_hyperspace(void);
 static void spawn_orb(Vec2 pos, int value);
+static void spawn_cal_code(Vec2 pos);                    /* Item 39 — plating repair pickup */
+static void maybe_drop_cal_code(Vec2 pos, float chance); /* Item 39 — RNG drop wrapper      */
 
 /* Progression */
 static void spawn_upgrade_options(void);
@@ -1215,6 +1243,8 @@ static WrapEvent update_physics(Vec2 *pos, Vec2 *vel,
 static void spawn_particles(Vec2 pos, int count, SDL_Color color);
 static void spawn_asteroid(Vec2 pos, int size);
 static void spawn_orb(Vec2 pos, int value);
+static void spawn_cal_code(Vec2 pos);                    /* Item 39 */
+static void maybe_drop_cal_code(Vec2 pos, float chance); /* Item 39 */
 
 /* -------------------------------------------------------------------------- */
 
@@ -1824,6 +1854,48 @@ static void spawn_orb(Vec2 pos, int value)
     }
 }
 
+/* ----------- Calibration Codes (Item 39, Rogue §4) -----------
+ * Plating-repair memory chips. Rare drops from killed combat enemies. On
+ * collection: player.plating_wear -= 1 (clamped at 0).  If wear is already
+ * zero, awards a 50-point consolation score so the pickup never feels wasted.
+ */
+
+/** @brief Spawns one calibration-code pickup at `pos` with a random drift. */
+static void spawn_cal_code(Vec2 pos)
+{
+    for (int i = 0; i < MAX_CAL_CODES; i++) {
+        if (!cal_codes[i].active) {
+            cal_codes[i].active     = 1;
+            cal_codes[i].pos        = pos;
+            float angle             = ((float)rand() / RAND_MAX) * 2.0f * (float)M_PI;
+            float speed             = 25.0f + 40.0f * ((float)rand() / RAND_MAX);
+            cal_codes[i].vel.x      = cosf(angle) * speed;
+            cal_codes[i].vel.y      = sinf(angle) * speed;
+            /* Codes persist longer than orbs because the drop is rare and the
+             * player may not realise it dropped during a frantic engagement. */
+            cal_codes[i].life       = 14.0f;
+            cal_codes[i].spin       = 0.0f;
+            cal_codes[i].trail_head = 0;
+            for (int k = 0; k < PHOS_TRAIL_LEN; k++) {
+                cal_codes[i].trail_pos[k] = pos;
+                cal_codes[i].trail_ang[k] = 0.0f;
+            }
+            break;
+        }
+    }
+}
+
+/** @brief Rolls a uniform [0,1) chance and spawns a calibration-code drop on success.
+ *  Centralises the drop-rate policy at every enemy-kill site so the
+ *  tuning constants live in one place per caller.  `chance` is a fraction
+ *  in [0..1] — typical values 0.08 (Scavenger) through 0.22 (Lictor). */
+static void maybe_drop_cal_code(Vec2 pos, float chance)
+{
+    if (((float)rand() / (float)RAND_MAX) < chance) {
+        spawn_cal_code(pos);
+    }
+}
+
 /* =========== PROGRESSION AND UPGRADES =========== */
 
 /** @brief Randomly selects 3 unique relics from the full pool for the player to choose. */
@@ -2053,6 +2125,7 @@ static void start_new_game()
     for (int i = 0; i < MAX_UFO_BULLETS; i++)  ufo_bullets[i].active  = 0;
     for (int i = 0; i < MAX_PARTICLES; i++)    particles[i].life      = 0.0f;
     for (int i = 0; i < MAX_ORBS; i++)         orbs[i].active         = 0;
+    for (int i = 0; i < MAX_CAL_CODES; i++)    cal_codes[i].active    = 0; /* Item 39 */
     for (int i = 0; i < MAX_SCORE_FLOATS; i++) score_floats[i].active = 0;
     for (int i = 0; i < MAX_EVENT_FLOATS; i++)  event_floats[i].active  = 0;
     for (int i = 0; i < MAX_GRAVITY_WELLS; i++) gravity_wells[i].active = 0;
@@ -2264,6 +2337,8 @@ void game_init()
     lictor_init();          /* Item 22: lictor elite pursuit interceptors          */
     emp_sentinel_init();    /* Item 25: emp sentinels — status-disruption units    */
     scavenger_init();       /* Item 24: scavenger probes — void-steel theft units  */
+    for (int i = 0; i < MAX_CAL_CODES; i++)
+        cal_codes[i].active = 0; /* Item 39: calibration code pickup pool */
 
     /* Define the Autodyne's silhouette from its static line segments */
     player.line_count = sizeof(ship_lines) / sizeof(Line);
@@ -4186,6 +4261,75 @@ static void update_particles_orbs_npcs(float dt)
         }
     }
 
+    /* ── Calibration Codes (Item 39) ──────────────────────────────── */
+    /* Plating-repair memory chips dropped by killed combat enemies.
+     * Drift + magnet-attract + lifetime cull mirror chronicle orbs; on
+     * collection we decrement player.plating_wear (or award consolation
+     * score if wear is already zero). */
+    for (int i = 0; i < MAX_CAL_CODES; i++) {
+        if (!cal_codes[i].active) continue;
+
+        cal_codes[i].life -= dt;
+        cal_codes[i].spin += dt * 2.4f;
+
+        /* Trail recording */
+        cal_codes[i].trail_pos[cal_codes[i].trail_head] = cal_codes[i].pos;
+        cal_codes[i].trail_ang[cal_codes[i].trail_head] = cal_codes[i].spin;
+        cal_codes[i].trail_head = (cal_codes[i].trail_head + 1) % PHOS_TRAIL_LEN;
+
+        /* Magnet attraction — extended radius vs orbs because the pickup
+         * is rare and valuable; gives the player a fair chance to chase. */
+        if (player.active) {
+            float dx     = player.pos.x - cal_codes[i].pos.x;
+            float dy     = player.pos.y - cal_codes[i].pos.y;
+            float dist2  = dx * dx + dy * dy;
+            float mag_r  = player_upgrades.magnet_radius + 80.0f;
+            if (dist2 < mag_r * mag_r) {
+                float dist = sqrtf(dist2);
+                if (dist > 0.01f) {
+                    float pull = god_mode ? 1500.0f : 1100.0f;
+                    cal_codes[i].vel.x *= (1.0f - 5.0f * dt);
+                    cal_codes[i].vel.y *= (1.0f - 5.0f * dt);
+                    cal_codes[i].vel.x += (dx / dist) * pull * dt;
+                    cal_codes[i].vel.y += (dy / dist) * pull * dt;
+                }
+            }
+        }
+        cal_codes[i].pos.x += cal_codes[i].vel.x * dt;
+        cal_codes[i].pos.y += cal_codes[i].vel.y * dt;
+
+        /* Lifetime / distance cull (slightly wider radius than orbs) */
+        if (cal_codes[i].life <= 0.0f
+            || (player.active
+                && distance_sq(cal_codes[i].pos, player.pos)
+                       > 1600.0f * 1600.0f)) {
+            cal_codes[i].active = 0;
+            continue;
+        }
+
+        /* Collection: touching the player applies +1 CAL repair */
+        if (player.active
+            && check_collision(player.pos, player.radius + 6.0f,
+                               cal_codes[i].pos, 8.0f)) {
+            cal_codes[i].active = 0;
+            audio_play(SFX_EXPLOSION_SM);
+            spawn_particles(player.pos, 6, HUD_AMBER);
+            if (player.plating_wear > 0) {
+                player.plating_wear -= 1;
+                spawn_event_float(player.pos.x, player.pos.y - 22.0f,
+                                  "+1 CAL", HUD_AMBER);
+                cugel9_say("CALIBRATION CODE COMPILED. PLATING INCREMENTED. ENJOY YOUR DELUSION.");
+            } else {
+                /* Pristine plating — convert to a 50-point morale bonus
+                 * so the pickup never feels wasted. */
+                score += 50;
+                spawn_event_float(player.pos.x, player.pos.y - 22.0f,
+                                  "CAL +50", HUD_TEXT_CYAN);
+                cugel9_say("PLATING ALREADY PRISTINE. CODE FILED UNDER MORALE BOOSTER.");
+            }
+        }
+    }
+
     /* ── Zone / home station ──────────────────────────────────────── */
     if (player.active) {
         player_dist_origin = sqrtf(player.pos.x * player.pos.x
@@ -4628,6 +4772,9 @@ static void update_collisions(float dt)
             for (int o = 0; o < orb_count; o++)
                 spawn_orb(ufo.pos, (ufo.size == 2) ? 10 : 20);
 
+            /* Item 39: 10% chance for a calibration code (15% for large UFO). */
+            maybe_drop_cal_code(ufo.pos, (ufo.size == 2) ? 0.10f : 0.15f);
+
             score += (ufo.size == 2) ? 200 : 1000;
             ufo_spawn_timer = 25.0f + ((float)rand() / RAND_MAX) * 15.0f;
             break;
@@ -4811,6 +4958,8 @@ static void update_collisions(float dt)
             spawn_particles(bullets[b].pos, 24, HUD_MAGENTA);
             audio_play(SFX_EXPLOSION_MD);
             spawn_orb(bullets[b].pos, 10);
+            /* Item 39: Ascians are Zone 3+ elites — 18% cal code drop. */
+            maybe_drop_cal_code(bullets[b].pos, 0.18f);
             score += 150;
             spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
                               "ASCIAN DOWN", HUD_MAGENTA);
@@ -4869,6 +5018,9 @@ static void update_collisions(float dt)
             spawn_particles(bullets[b].pos, 28, HUD_CINNABAR);
             audio_play(SFX_EXPLOSION_MD);
             spawn_orb(bullets[b].pos, 12);
+            /* Item 39: Lictors are Zone 4+ pursuit elites — 22% cal code drop
+             * (highest in the pool — they're the hardest to land). */
+            maybe_drop_cal_code(bullets[b].pos, 0.22f);
             score += 200;
             spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
                               "LICTOR DOWN", HUD_CINNABAR);
@@ -4927,6 +5079,8 @@ static void update_collisions(float dt)
             spawn_particles(bullets[b].pos, 24, HUD_PURPLE);
             audio_play(SFX_EXPLOSION_MD);
             spawn_orb(bullets[b].pos, 6);
+            /* Item 39: EMP Sentinels are fragile but distractingly dangerous — 12% cal code drop. */
+            maybe_drop_cal_code(bullets[b].pos, 0.12f);
             score += 100;
             spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
                               "SENTINEL DOWN", HUD_TEXT_CYAN);
@@ -4976,6 +5130,9 @@ static void update_collisions(float dt)
                 audio_play(SFX_EXPLOSION_MD);
                 /* Always give a small XP orb for the kill itself. */
                 spawn_orb(bullets[b].pos, 4);
+                /* Item 39: Scavengers are weakest — 8% cal code drop
+                 * (cargo refund is the primary reward — cal code is a bonus). */
+                maybe_drop_cal_code(bullets[b].pos, 0.08f);
                 score += 120;
                 spawn_event_float(bullets[b].pos.x,
                                   bullets[b].pos.y - 18.0f,
@@ -5010,6 +5167,10 @@ static void update_collisions(float dt)
                             (SDL_Color){57, 255, 20, 220});
             audio_play(SFX_EXPLOSION_MD);
             spawn_orb(bullets[b].pos, 8);
+            /* Item 39: Rust-Weavers are Zone 2+ — 12% cal code drop.
+             * Thematic resonance: drone that DEGRADES plating drops the
+             * code that REPAIRS it. */
+            maybe_drop_cal_code(bullets[b].pos, 0.12f);
             score += 75;
             spawn_event_float(bullets[b].pos.x, bullets[b].pos.y - 18.0f,
                               "RUSTWEAVER DOWN",
@@ -6348,6 +6509,54 @@ static void render_entities(void)
                             PHOS_TRAIL_LEN, orbs[i].trail_head,
                             1.0f, 0.3f, 0.6f);
         vg_draw_shape(&os, orbs[i].pos, orbs[i].life * 5.0f, 1.0f);
+    }
+
+    /* ── Calibration Codes (Item 39) ────────────────────────────── *
+     * Amber bracket-corner box with a horizontal "data bar" inside.
+     * Bracket-corner geometry differentiates it from chronicle orbs
+     * (closed squares) so players read it as "salvaged memory chip"
+     * at a glance.  Larger silhouette than orbs because the drop is
+     * rare and we want it legible across longer chase distances. */
+    for (int i = 0; i < MAX_CAL_CODES; i++) {
+        if (!cal_codes[i].active) continue;
+
+        /* Pulse alpha as the code nears end-of-life and on its spin
+         * accumulator so it telegraphs as a powered, ticking pickup. */
+        float fade  = (cal_codes[i].life > 2.0f)
+                        ? 1.0f
+                        : (cal_codes[i].life * 0.5f);
+        float pulse = 0.7f + 0.3f * sinf(cal_codes[i].spin * 3.0f);
+        Uint8 alpha = (Uint8)(220.0f * fade * pulse);
+        SDL_Color cal_col = { HUD_AMBER.r, HUD_AMBER.g, HUD_AMBER.b, alpha };
+
+        static Line cal_lines[9];
+        static int  cal_init = 0;
+        if (!cal_init) {
+            cal_init = 1;
+            /* Top-left bracket */
+            cal_lines[0] = (Line){{-4, -4}, {-2, -4}};
+            cal_lines[1] = (Line){{-4, -4}, {-4, -2}};
+            /* Top-right bracket */
+            cal_lines[2] = (Line){{ 4, -4}, { 2, -4}};
+            cal_lines[3] = (Line){{ 4, -4}, { 4, -2}};
+            /* Bottom-left bracket */
+            cal_lines[4] = (Line){{-4,  4}, {-2,  4}};
+            cal_lines[5] = (Line){{-4,  4}, {-4,  2}};
+            /* Bottom-right bracket */
+            cal_lines[6] = (Line){{ 4,  4}, { 2,  4}};
+            cal_lines[7] = (Line){{ 4,  4}, { 4,  2}};
+            /* Center "data bar" — horizontal pulse line */
+            cal_lines[8] = (Line){{-2,  0}, { 2,  0}};
+        }
+        Shape cs = { cal_lines, 9, cal_col };
+        /* Faint trail so it streaks while drifting toward the player. */
+        vg_draw_shape_trail(&cs, cal_codes[i].trail_pos,
+                            cal_codes[i].trail_ang, PHOS_TRAIL_LEN,
+                            cal_codes[i].trail_head, 1.0f, 0.25f, 0.5f);
+        /* Slow rotation so the bracket reads as "thinking" rather than dead. */
+        float scale = 1.0f + 0.08f * sinf(cal_codes[i].spin * 5.0f);
+        vg_draw_shape(&cs, cal_codes[i].pos,
+                      cal_codes[i].spin * 0.3f, scale);
     }
 
     /* ── Star-Shadow vector lines (Solar Flare lore tie-in) ─────────

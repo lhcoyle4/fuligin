@@ -20,6 +20,7 @@
 #define MAX_UFO_BULLETS   32
 #define MAX_PARTICLES    128
 #define MAX_ORBS         100
+#define MAX_CAL_CODES     12   /* calibration code drops (Item 39, Rogue §4 scrolls-of-enchant-armor analogue) */
 #define MAX_NPC            4
 #define MAX_STRUCTURE      6
 #define MAX_SCORE_FLOATS  24
@@ -345,6 +346,26 @@ typedef struct {
     float trail_ang[PHOS_TRAIL_LEN];
     int   trail_head;
 } OrbEntity;
+
+/**
+ * @brief A calibration-code pickup (Item 39, Rogue §4 Calibration Codes).
+ * Rare drop from killed combat enemies (UFO/Ascian/Lictor/Rust-Weaver/EMP
+ * Sentinel/Scavenger).  On collection decrements `player.plating_wear` by 1
+ * (or awards a 50-point consolation score if plating is already pristine).
+ * Drifts like a Chronicle Orb — magnet-attracted, finite lifetime, despawn
+ * on distance.  Rendered as an amber bracket-corner box with a "[CAL]" glyph
+ * inside so it reads as a salvaged memory chip rather than a regular orb.
+ */
+typedef struct {
+    int   active;
+    Vec2  pos;
+    Vec2  vel;
+    float life;          /* lifetime seconds until despawn (drops persist longer than orbs) */
+    float spin;          /* rotation accumulator for bracket-corner pulse animation        */
+    Vec2  trail_pos[PHOS_TRAIL_LEN];
+    float trail_ang[PHOS_TRAIL_LEN];
+    int   trail_head;
+} CalibrationCodeEntity;
 
 /**
  * @brief An expanding shockwave ring emitted by certain upgrades (e.g. Nova Shell).
